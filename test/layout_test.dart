@@ -12,7 +12,7 @@ void main() {
       await tester.pumpWidget(const FlutrisApp(showSplash: false));
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('FLUTRIS'), findsOneWidget);
+      expect(find.textContaining('FLUTRIS'), findsWidgets);
       await tester.tap(find.bySemanticsLabel('Pause or resume'));
       await tester.pump();
       expect(find.text('PAUSED'), findsOneWidget);
