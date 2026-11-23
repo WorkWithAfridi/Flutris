@@ -31,6 +31,12 @@ class BestScoreStore {
     }
   }
 
+  /// Clears the in-memory cache and reads again from disk.
+  Future<void> reload() async {
+    _scores.clear();
+    await load();
+  }
+
   /// Writes a new record for [mode].
   Future<void> save(GameMode mode, int score) async {
     _scores[mode] = score;
