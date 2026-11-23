@@ -65,7 +65,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
     return '${flow.state.index}|${flow.selected}|${engine.status.index}|'
         '${engine.score}|${engine.lines}|${engine.level}|${engine.combo}|'
         '${engine.holdPiece?.index ?? -1}|${engine.canHold}|'
-        '${_game.isHintVisible}|${engine.mode.mode.index}|'
+        '${_game.isHintVisible}|${_game.hintSummary}|${engine.mode.mode.index}|'
         '${flow.bestScores[engine.mode.mode] ?? 0}';
   }
 
@@ -194,7 +194,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
   Widget _smallControls(double scale) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      SizedBox(width: 46 * scale),
+      SizedBox(width: 20 * scale),
       _smallControl(
         !_hintsAvailable
             ? 'NO HINT'
@@ -206,7 +206,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
         scale,
         enabled: _hintsAvailable,
       ),
-      SizedBox(width: 12 * scale),
+      SizedBox(width: 8 * scale),
       _smallControl(
         _game.engine.canHold ? 'HOLD READY' : 'HOLD',
         'Hold piece',
@@ -214,22 +214,30 @@ class _HandheldScreenState extends State<HandheldScreen> {
         scale,
         enabled: _game.engine.canHold,
       ),
-      SizedBox(width: 12 * scale),
+      SizedBox(width: 8 * scale),
       _smallControl(
         _pauseControlLabel,
         _pauseControlSemantics,
         _pauseControl,
         scale,
       ),
+      SizedBox(width: 8 * scale),
+      _smallControl(
+        'MENU',
+        'Quit to menu',
+        _game.quitToMenu,
+        scale,
+        width: 34,
+      ),
       const Spacer(),
       Padding(
         padding: EdgeInsets.only(top: 12 * scale),
         child: CustomPaint(
-          size: Size(75 * scale, 48 * scale),
+          size: Size(58 * scale, 38 * scale),
           painter: const _SpeakerPainter(),
         ),
       ),
-      SizedBox(width: 5 * scale),
+      SizedBox(width: 2 * scale),
     ],
   );
 
@@ -480,10 +488,38 @@ class _HandheldScreenState extends State<HandheldScreen> {
                 const _Label('—', size: 8),
             ],
           ),
+          if (_game.isHintVisible && _game.placementHint != null)
+            _hintPanel(_game.placementHint!, width),
         ],
       ),
     );
   }
+
+  Widget _hintPanel(Placement hint, double width) => Container(
+        width: width,
+        padding: const EdgeInsets.only(top: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _Label('HINT', size: 6, spacing: .7),
+            Text(
+              'R${hint.rotation} → COL ${hint.x + 1}',
+              style: const TextStyle(
+                fontSize: 7,
+                fontWeight: FontWeight.w800,
+                color: _ink,
+              ),
+            ),
+            Text(
+              hint.rationale,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 6, height: 1.2, color: _ink),
+            ),
+          ],
+        ),
+      );
 
   Widget _metric(String label, String value, double width) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,13 +799,14 @@ class _HandheldScreenState extends State<HandheldScreen> {
     VoidCallback onTap,
     double scale, {
     bool enabled = true,
+    double width = 44,
   }) => Column(
     children: [
       Transform.rotate(
         angle: -.15,
         child: _ConsoleButton(
           label: label,
-          width: 44 * scale,
+          width: width * scale,
           height: 15 * scale,
           radius: BorderRadius.circular(10 * scale),
           hitPadding: EdgeInsets.symmetric(
