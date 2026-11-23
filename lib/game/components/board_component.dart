@@ -83,6 +83,14 @@ class BoardComponent extends PositionComponent {
         _drawCell(canvas, cellRect(cell.x, cell.y), active.type);
       }
     }
+
+    canvas.drawRect(
+      Rect.fromLTWH(1, 1, size.x - 2, size.y - 2),
+      Paint()
+        ..color = palette.ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
   }
 
   void _drawCell(Canvas canvas, Rect rect, PieceType type) {
