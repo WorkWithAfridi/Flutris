@@ -64,6 +64,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Stack(
                   children: [
                     SizedBox.expand(child: GameWidget<FlameSplash>(game: _splash)),
+                    const Center(child: _AppIcon()),
                     // Placed above the game so it receives taps first;
                     // GameWidget's own opaque hit test would swallow them.
                     Positioned.fill(
@@ -83,4 +84,53 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
     );
   }
+}
+
+/// The app icon, scaled in and then gently breathing.
+class _AppIcon extends StatefulWidget {
+  const _AppIcon();
+
+  @override
+  State<_AppIcon> createState() => _AppIconState();
+}
+
+class _AppIconState extends State<_AppIcon> with TickerProviderStateMixin {
+  late final AnimationController _entry = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  )..forward();
+
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _entry.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: FadeTransition(
+          opacity: CurvedAnimation(parent: _entry, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.65, end: 1).animate(
+              CurvedAnimation(parent: _entry, curve: Curves.easeOutBack),
+            ),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 1, end: 1.04).animate(
+                CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+              ),
+              child: Image.asset(
+                'assets/branding/flutris-app-icon.png',
+                width: 150,
+                height: 150,
+              ),
+            ),
+          ),
+        ),
+      );
 }
