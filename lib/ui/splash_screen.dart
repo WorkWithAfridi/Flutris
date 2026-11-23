@@ -124,10 +124,29 @@ class _AppIconState extends State<_AppIcon> with TickerProviderStateMixin {
               scale: Tween<double>(begin: 1, end: 1.04).animate(
                 CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
               ),
-              child: Image.asset(
-                'assets/branding/flutris-app-icon.png',
-                width: 150,
-                height: 150,
+              child: Container(
+                width: 160,
+                height: 160,
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFE6D8F0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x80573379),
+                      blurRadius: 24,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/branding/flutris-app-icon.png',
+                    width: 154,
+                    height: 154,
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
             ),
           ),
