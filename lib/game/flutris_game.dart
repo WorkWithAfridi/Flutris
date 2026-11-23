@@ -1,0 +1,290 @@
+import 'dart:ui' show Color;
+
+import 'package:flame/game.dart';
+import 'package:flame/input.dart';
+import 'package:flutter/services.dart'
+    show KeyDownEvent, KeyEvent, KeyRepeatEvent, LogicalKeyboardKey;
+import 'package:flutter/widgets.dart' show KeyEventResult;
+
+import 'components/board_component.dart';
+import 'components/flow_overlay.dart';
+import 'components/line_clear_effect.dart';
+import 'tetris.dart';
+
+/// Flame game that hosts the mode menu, the rules engine and the render tree.
+///
+/// Flame responsibilities: the update loop (gravity/lock timing), the render
+/// tree ([BoardComponent], [FlowOverlayComponent], line-clear effects),
+/// keyboard input and the game canvas. Rules live in the pure-Dart
+/// [TetrisEngine]; navigation lives in [GameFlow].
+///
+/// On-screen buttons call the public input methods; the menu is rendered
+/// inside the LCD, so the Flutter UI needs no changes.
+class FlutrisGame extends FlameGame with KeyboardEvents {
+  FlutrisGame({
+    TetrisEngine? engine,
+    this.palette = lcdPalette,
+    this.startInMenu = true,
+    this.renderHud = true,
+  }) : _engine = engine ?? TetrisEngine() {
+    flow = GameFlow(onStart: _startMode);
+  }
+
+  static const int columns = TetrisEngine.columns;
+  static const int rows = TetrisEngine.rows;
+
+  final BoardPalette palette;
+  final bool startInMenu;
+
+  /// Whether the Flame overlay draws its compact in-canvas HUD.
+  ///
+  /// Set this to false when a surrounding Flutter layout presents the same
+  /// engine state in a dedicated panel.
+  final bool renderHud;
+
+  /// Notifies a Flutter shell about menu and engine state changes.
+  void Function()? onStateChanged;
+
+  TetrisEngine _engine;
+  TetrisEngine get engine => _engine;
+
+  late final GameFlow flow;
+  late final BoardComponent _board;
+  late final FlowOverlayComponent _overlay;
+
+  final Set<LogicalKeyboardKey> _heldKeys = <LogicalKeyboardKey>{};
+
+  double _horizontalRepeat = _initialDelay;
+  double _verticalRepeat = 0;
+
+  static const double _initialDelay = 0.17;
+  static const double _repeatInterval = 0.055;
+  static const double _softDropInterval = 0.045;
+
+  @override
+  Color backgroundColor() => palette.background;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    _board = BoardComponent(engine: _engine, palette: palette, priority: 1);
+    _overlay = FlowOverlayComponent(
+      flow: flow,
+      palette: palette,
+      engine: _engine,
+      renderHud: renderHud,
+      priority: 3,
+    );
+    await add(_board);
+    await add(_overlay);
+    _wireEngine(_engine);
+
+    if (startInMenu) {
+      flow.toMenu();
+    } else {
+      flow.state = FlowState.playing;
+      _engine.start();
+    }
+  }
+
+  void _wireEngine(TetrisEngine engine) {
+    engine.onLinesCleared = _spawnLineClearEffect;
+    engine.onChanged = () {
+      flow.sync(engine);
+      onStateChanged?.call();
+    };
+    engine.onEvent = (event) {
+      if (event == TetrisEvent.victory ||
+          event == TetrisEvent.gameOver ||
+          event == TetrisEvent.timeUp) {
+        flow.recordBest(engine);
+      }
+      flow.sync(engine);
+    };
+  }
+
+  void _startMode(ModeConfig mode) {
+    _engine = TetrisEngine(
+      mode: mode,
+      best: flow.bestScores[mode.mode],
+    );
+    _board.engine = _engine;
+    _overlay.engine = _engine;
+    _wireEngine(_engine);
+    flow.state = FlowState.playing;
+    _engine.start();
+  }
+
+  void _spawnLineClearEffect(List<int> rows) {
+    add(
+      LineClearEffect(
+        rows: rows,
+        board: _board,
+        palette: palette,
+        priority: 2,
+      ),
+    );
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (dt <= 0) return;
+    if (flow.isPlaying) {
+      _engine.tick(Duration(microseconds: (dt * 1e6).round()));
+    }
+    _handleHeldKeys(dt);
+  }
+
+  void _handleHeldKeys(double dt) {
+    if (!flow.isPlaying) return;
+    final left = _heldKeys.contains(LogicalKeyboardKey.arrowLeft);
+    final right = _heldKeys.contains(LogicalKeyboardKey.arrowRight);
+    final down = _heldKeys.contains(LogicalKeyboardKey.arrowDown);
+
+    if (left != right) {
+      _horizontalRepeat += dt;
+      final threshold =
+          _horizontalRepeat <= _initialDelay ? _initialDelay : _repeatInterval;
+      if (_horizontalRepeat >= threshold) {
+        _horizontalRepeat = 0;
+        if (left) {
+          _engine.moveLeft();
+        } else {
+          _engine.moveRight();
+        }
+      }
+    } else {
+      _horizontalRepeat = _initialDelay;
+    }
+
+    if (down) {
+      _verticalRepeat += dt;
+      if (_verticalRepeat >= _softDropInterval) {
+        _verticalRepeat = 0;
+        _engine.softDrop();
+      }
+    } else {
+      _verticalRepeat = 0;
+    }
+  }
+
+  @override
+  KeyEventResult onKeyEvent(
+    KeyEvent event,
+    Set<LogicalKeyboardKey> keysPressed,
+  ) {
+    _heldKeys
+      ..clear()
+      ..addAll(keysPressed);
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    if (flow.isMenu) {
+      if (key == LogicalKeyboardKey.arrowUp) {
+        flow.move(-1);
+      } else if (key == LogicalKeyboardKey.arrowDown) {
+        flow.move(1);
+      } else if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.space ||
+          key == LogicalKeyboardKey.keyZ) {
+        flow.confirm();
+      } else {
+        return KeyEventResult.ignored;
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (flow.isEndScreen) {
+      if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.space ||
+          key == LogicalKeyboardKey.keyZ) {
+        flow.toMenu();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // In-game controls.
+    if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyA) {
+      return KeyEventResult.handled; // held movement handled in update()
+    }
+    if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyD) {
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown) {
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyX) {
+      hardDrop();
+    } else if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.keyZ) {
+      rotate();
+    } else if (key == LogicalKeyboardKey.keyQ) {
+      rotateCounterClockwise();
+    } else if (key == LogicalKeyboardKey.keyC ||
+        key == LogicalKeyboardKey.shiftLeft) {
+      hold();
+    } else if (key == LogicalKeyboardKey.keyH) {
+      toggleHint();
+    } else if (key == LogicalKeyboardKey.keyP ||
+        key == LogicalKeyboardKey.escape) {
+      togglePause();
+    } else if (key == LogicalKeyboardKey.keyR) {
+      restart();
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  // ---------------------------------------------------------------------
+  // Input API for the on-screen handheld controls
+  // ---------------------------------------------------------------------
+
+  void moveLeft() => _engine.moveLeft();
+
+  void moveRight() => _engine.moveRight();
+
+  void moveDown() => _engine.softDrop();
+
+  void hardDrop() => _engine.hardDrop();
+
+  void rotate() => _engine.rotateClockwise();
+
+  void rotateCounterClockwise() => _engine.rotateCounterClockwise();
+
+  void hold() => _engine.hold();
+
+  void togglePause() {
+    _engine.togglePause();
+    flow.sync(_engine);
+  }
+
+  void restart() => _engine.start();
+
+  // Menu navigation (forward D-pad / A / B while flow.isMenu).
+  void menuUp() {
+    flow.move(-1);
+    onStateChanged?.call();
+  }
+
+  void menuDown() {
+    flow.move(1);
+    onStateChanged?.call();
+  }
+
+  void confirm() {
+    flow.confirm();
+    onStateChanged?.call();
+  }
+
+  void back() {
+    flow.toMenu();
+    onStateChanged?.call();
+  }
+
+  void toggleHint() => _overlay.showHint = !_overlay.showHint;
+}
