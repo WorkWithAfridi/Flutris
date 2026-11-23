@@ -1,0 +1,979 @@
+import 'dart:math' as math;
+
+import 'package:flame/game.dart' show GameWidget;
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+
+import '../game/flutris_game.dart';
+import '../game/tetris.dart';
+
+const _ink = Color(0xFF302449);
+
+/// A full-screen handheld shell with a Flame game display and tactile controls.
+class HandheldScreen extends StatefulWidget {
+  const HandheldScreen({super.key});
+
+  @override
+  State<HandheldScreen> createState() => _HandheldScreenState();
+}
+
+class _HandheldScreenState extends State<HandheldScreen> {
+  bool _sound = true;
+  late final FlutrisGame _game;
+
+  @override
+  void initState() {
+    super.initState();
+    _game = FlutrisGame(renderHud: false);
+    _game.onStateChanged = _refreshFromGame;
+  }
+
+  @override
+  void dispose() {
+    _game.onStateChanged = null;
+    _game.engine.onChanged = null;
+    super.dispose();
+  }
+
+  void _refreshFromGame() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final insets = MediaQuery.viewPaddingOf(context);
+        final horizontal = math.min(18.0, width * .055);
+        final usableHeight = height - insets.top - insets.bottom;
+        final widthScale = (width - horizontal * 2) / 288;
+        final heightScale = (usableHeight - 170) / 230;
+        final controlsScale = math.min(widthScale, heightScale).clamp(.58, 1.0);
+
+        return ColoredBox(
+          color: const Color(0xFF382D46),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const IgnorePointer(
+                child: CustomPaint(painter: _DeviceInternalsPainter()),
+              ),
+              const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xBFDCCAF0),
+                        Color(0xA67F659E),
+                        Color(0xB27A6196),
+                      ],
+                      stops: [0, .48, 1],
+                    ),
+                  ),
+                ),
+              ),
+              const IgnorePointer(
+                child: CustomPaint(painter: _GlassSheenPainter()),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  math.max(10, insets.top + 8),
+                  horizontal,
+                  math.max(12, insets.bottom + 8),
+                ),
+                child: Column(
+                  children: [
+                    _header(),
+                    SizedBox(height: 9 * controlsScale),
+                    Expanded(child: _display()),
+                    SizedBox(height: 12 * controlsScale),
+                    _controls(controlsScale),
+                    SizedBox(height: 8 * controlsScale),
+                    _smallControls(controlsScale),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _header() => Row(
+    children: [
+      const Text(
+        'flutris',
+        style: TextStyle(
+          fontSize: 21,
+          fontWeight: FontWeight.w900,
+          fontStyle: FontStyle.italic,
+          letterSpacing: -1.2,
+          color: _ink,
+        ),
+      ),
+      const Spacer(),
+      Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _statusColor,
+          boxShadow: [
+            BoxShadow(
+              color: _statusColor.withValues(alpha: .5),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 7),
+      _Label(_statusLabel, size: 8, spacing: 1.5),
+    ],
+  );
+
+  Color get _statusColor => _game.flow.isPaused || _game.flow.isEndScreen
+      ? const Color(0xFFCB7B63)
+      : const Color(0xFF9ACD7E);
+
+  String get _statusLabel => switch (_game.flow.state) {
+    FlowState.menu => 'SELECT MODE',
+    FlowState.playing => 'PLAYING',
+    FlowState.paused => 'PAUSED',
+    FlowState.gameOver => 'GAME OVER',
+    FlowState.victory => 'VICTORY',
+    FlowState.timeUp => 'TIME UP',
+  };
+
+  Widget _smallControls(double scale) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(width: 46 * scale),
+      _smallControl(
+        _sound ? 'SOUND ON' : 'SOUND OFF',
+        'Toggle sound',
+        () => setState(() => _sound = !_sound),
+        scale,
+      ),
+      SizedBox(width: 12 * scale),
+      _smallControl(
+        _game.engine.canHold ? 'HOLD READY' : 'HOLD',
+        'Hold piece',
+        _game.hold,
+        scale,
+      ),
+      SizedBox(width: 12 * scale),
+      _smallControl(_pauseControlLabel, _pauseControlSemantics, _pauseControl,
+          scale),
+      const Spacer(),
+      Padding(
+        padding: EdgeInsets.only(top: 12 * scale),
+        child: CustomPaint(
+          size: Size(75 * scale, 48 * scale),
+          painter: const _SpeakerPainter(),
+        ),
+      ),
+      SizedBox(width: 5 * scale),
+    ],
+  );
+
+  String get _pauseControlLabel => switch (_game.flow.state) {
+    FlowState.menu => 'BACK',
+    FlowState.paused => 'RESUME',
+    FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'MENU',
+    FlowState.playing => 'PAUSE',
+  };
+
+  String get _pauseControlSemantics => switch (_game.flow.state) {
+    FlowState.menu => 'Back to menu',
+    FlowState.paused => 'Resume game',
+    FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'Return to menu',
+    FlowState.playing => 'Pause game',
+  };
+
+  VoidCallback get _pauseControl => switch (_game.flow.state) {
+    FlowState.menu => _game.back,
+    FlowState.paused || FlowState.playing => _game.togglePause,
+    FlowState.gameOver || FlowState.victory || FlowState.timeUp => _game.confirm,
+  };
+
+  Widget _display() => SizedBox.expand(
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFF302D3E),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(15),
+          topRight: Radius.circular(15),
+          bottomLeft: Radius.circular(15),
+          bottomRight: Radius.circular(43),
+        ),
+        border: Border.all(color: const Color(0xFF493E53), width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40816A9B),
+            offset: Offset(0, 4),
+            blurRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 5,
+                height: 5,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFAED590),
+                  boxShadow: [
+                    BoxShadow(color: Color(0x669ADD79), blurRadius: 5),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const _Label(
+                'BATTERY',
+                size: 7,
+                spacing: 1.5,
+                color: Color(0xFFADA6BC),
+              ),
+              const Spacer(),
+              const _Label(
+                'DOT MATRIX DISPLAY',
+                size: 7,
+                spacing: 1.2,
+                color: Color(0xFFADA6BC),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFB5C49D),
+                border: Border.all(color: const Color(0xFF171E20), width: 3),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    children: [
+                      _lcdHeader(),
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              flex: 58,
+                              child: Center(
+                                child: AspectRatio(
+                                  aspectRatio: 0.5,
+                                  child: GameWidget<FlutrisGame>(game: _game),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              color: _ink.withValues(alpha: .24),
+                            ),
+                            Expanded(
+                              flex: 42,
+                              child: _enginePanel(
+                                constraints.maxWidth * .42 - 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 11),
+          const _Label(
+            'FLUTRIS  •  POCKET EDITION',
+            size: 6,
+            color: Color(0xFFADA6BC),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _lcdHeader() {
+    final flow = _game.flow;
+    final modeName = flow.isMenu
+        ? flow.selectedMode.name
+        : _game.engine.mode.name;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 7, 8, 2),
+      child: Row(
+        children: [
+          const _Label('FLUTRIS', size: 10, spacing: 1.2),
+          const Spacer(),
+          _Label(modeName, size: 7, spacing: .6),
+        ],
+      ),
+    );
+  }
+
+  Widget _enginePanel(double width) {
+    final flow = _game.flow;
+    final engine = _game.engine;
+    if (flow.isMenu) {
+      final mode = flow.selectedMode;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _metric('MODE', mode.name, width),
+            const SizedBox(height: 12),
+            _metric('GOAL', mode.goalLabel, width),
+            const SizedBox(height: 12),
+            _metric('BEST', _scoreText(flow.bestScores[mode.mode] ?? 0), width),
+            const Spacer(),
+            Text(
+              mode.tagline,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 7,
+                letterSpacing: .7,
+                color: _ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'UP / DOWN\nA TO START',
+              style: TextStyle(
+                fontSize: 6,
+                height: 1.5,
+                letterSpacing: .4,
+                color: _ink,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final best = math.max(engine.best, flow.bestScores[engine.mode.mode] ?? 0);
+    final time = engine.mode.timeLimit == null
+        ? engine.elapsed
+        : engine.remainingTime;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _metric('SCORE', _scoreText(engine.score), width),
+          const SizedBox(height: 8),
+          _metric('BEST', _scoreText(best), width),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _metric('LEVEL', _levelText(engine), width / 2)),
+              Expanded(child: _metric('LINES', '${engine.lines}', width / 2)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _Label(
+            engine.mode.goalType == GoalType.time ? 'TIME LEFT' : 'TIME',
+            size: 6,
+            spacing: .5,
+          ),
+          Text(
+            _durationText(time),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const _Label('NEXT', size: 6, spacing: .7),
+          Expanded(
+            child: Center(
+              child: _PiecePreview(
+                type: engine.nextPiece,
+                width: math.min(width - 18, 54),
+                height: 48,
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              const _Label('HOLD', size: 6, spacing: .6),
+              const Spacer(),
+              if (engine.holdPiece != null)
+                _PiecePreview(
+                  type: engine.holdPiece,
+                  width: math.min(width * .5, 32),
+                  height: 26,
+                )
+              else
+                const _Label('—', size: 8),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value, double width) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _Label(label, size: 6, spacing: .6),
+      const SizedBox(height: 2),
+      SizedBox(
+        width: math.max(0, width - 4),
+        child: FittedBox(
+          alignment: Alignment.centerLeft,
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: const TextStyle(
+              fontSize: 13,
+              letterSpacing: .5,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  String _scoreText(int score) => score.toString().padLeft(6, '0');
+
+  String _levelText(TetrisEngine engine) => engine.mode.mode == GameMode.master
+      ? 'M${engine.level - engine.mode.startingLevel + 1}'
+      : engine.level.toString().padLeft(2, '0');
+
+  String _durationText(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Widget _controls(double scale) {
+    final dpadSize = 135 * scale;
+    final stemSize = 41 * scale;
+    final stemPosition = (dpadSize - stemSize) / 2;
+
+    return SizedBox(
+      height: dpadSize,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          SizedBox(
+            width: dpadSize,
+            height: dpadSize,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _ink.withValues(alpha: .09),
+                border: Border.all(color: const Color(0x66533E68)),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: stemSize,
+                    height: stemSize,
+                    color: const Color(0xFF302D39),
+                  ),
+                  Positioned(
+                    top: 9 * scale,
+                    left: stemPosition,
+                    child: _direction(
+                      'Hard drop',
+                      '↑',
+                      const BorderRadius.vertical(top: Radius.circular(6)),
+                      scale,
+                      _game.hardDrop,
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 9 * scale,
+                    left: stemPosition,
+                    child: _direction(
+                      'Move down',
+                      '↓',
+                      const BorderRadius.vertical(bottom: Radius.circular(6)),
+                      scale,
+                      _game.moveDown,
+                    ),
+                  ),
+                  Positioned(
+                    left: 9 * scale,
+                    top: stemPosition,
+                    child: _direction(
+                      'Move left',
+                      '←',
+                      const BorderRadius.horizontal(left: Radius.circular(6)),
+                      scale,
+                      _game.moveLeft,
+                    ),
+                  ),
+                  Positioned(
+                    right: 9 * scale,
+                    top: stemPosition,
+                    child: _direction(
+                      'Move right',
+                      '→',
+                      const BorderRadius.horizontal(right: Radius.circular(6)),
+                      scale,
+                      _game.moveRight,
+                    ),
+                  ),
+                  Container(
+                    width: 16 * scale,
+                    height: 16 * scale,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF24222E),
+                      border: Border.all(color: const Color(0xFF51475E)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 153 * scale,
+            child: Transform.rotate(
+              angle: -.22,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _actionButton(
+                    'B',
+                    'DROP',
+                    'Drop piece',
+                    scale,
+                    _game.hardDrop,
+                  ),
+                  _actionButton(
+                    'A',
+                    'ROTATE',
+                    'Rotate piece',
+                    scale,
+                    _game.rotate,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _direction(
+    String label,
+    String glyph,
+    BorderRadius radius,
+    double scale,
+    VoidCallback onTap,
+  ) => _ConsoleButton(
+    label: label,
+    width: 41 * scale,
+    height: 41 * scale,
+    radius: radius,
+    onTap: onTap,
+    child: Text(
+      glyph,
+      style: TextStyle(fontSize: 23 * scale, color: const Color(0xFF96909E)),
+    ),
+  );
+
+  Widget _actionButton(
+    String letter,
+    String caption,
+    String label,
+    double scale,
+    VoidCallback onTap,
+  ) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: EdgeInsets.all(5 * scale),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _ink.withValues(alpha: .16),
+          border: Border.all(color: const Color(0x66533E68)),
+        ),
+        child: _ConsoleButton(
+          label: label,
+          width: 52 * scale,
+          height: 52 * scale,
+          radius: BorderRadius.circular(30 * scale),
+          color: const Color(0xFF655078),
+          onTap: onTap,
+          child: Text(
+            letter,
+            style: TextStyle(
+              fontSize: 25 * scale,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFE0D3EC),
+            ),
+          ),
+        ),
+      ),
+      SizedBox(height: 8 * scale),
+      _Label(caption, size: 8 * scale, spacing: 1.7 * scale),
+    ],
+  );
+
+  Widget _smallControl(
+    String text,
+    String label,
+    VoidCallback onTap,
+    double scale,
+  ) => Column(
+    children: [
+      Transform.rotate(
+        angle: -.15,
+        child: _ConsoleButton(
+          label: label,
+          width: 44 * scale,
+          height: 15 * scale,
+          radius: BorderRadius.circular(10 * scale),
+          onTap: onTap,
+          child: const SizedBox(),
+        ),
+      ),
+      SizedBox(height: 10 * scale),
+      _Label(text, size: 7 * scale, spacing: 1 * scale),
+    ],
+  );
+}
+
+class _ConsoleButton extends StatefulWidget {
+  const _ConsoleButton({
+    required this.label,
+    required this.width,
+    required this.height,
+    required this.radius,
+    required this.child,
+    this.onTap,
+    this.color = const Color(0xFF35313F),
+  });
+  final String label;
+  final double width;
+  final double height;
+  final BorderRadius radius;
+  final Widget child;
+  final VoidCallback? onTap;
+  final Color color;
+
+  @override
+  State<_ConsoleButton> createState() => _ConsoleButtonState();
+}
+
+class _ConsoleButtonState extends State<_ConsoleButton> {
+  bool _pressed = false;
+
+  void _activate() {
+    HapticFeedback.selectionClick();
+    widget.onTap?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: widget.label,
+    onTap: _activate,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: _activate,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 65),
+        transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          borderRadius: widget.radius,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              widget.color,
+              Color.lerp(widget.color, const Color(0xFF000000), .25)!,
+            ],
+          ),
+          border: Border.all(color: const Color(0xFF26222F), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF69567F),
+              offset: Offset(0, _pressed ? 1 : 4),
+              blurRadius: _pressed ? 1 : 2,
+            ),
+          ],
+        ),
+        child: Center(child: widget.child),
+      ),
+    ),
+  );
+}
+
+class _Label extends StatelessWidget {
+  const _Label(
+    this.text, {
+    this.size = 10,
+    this.spacing = 0,
+    this.color = _ink,
+  });
+  final String text;
+  final double size;
+  final double spacing;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    maxLines: 1,
+    style: TextStyle(
+      fontSize: size,
+      letterSpacing: spacing,
+      color: color,
+      fontWeight: FontWeight.w700,
+    ),
+  );
+}
+
+class _DeviceInternalsPainter extends CustomPainter {
+  const _DeviceInternalsPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    Offset at(double x, double y) => Offset(w * x, h * y);
+
+    final pcbRect = Rect.fromLTWH(w * .035, h * .57, w * .93, h * .37);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, Radius.circular(w * .065)),
+      Paint()..color = const Color(0xB8203D3C),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, Radius.circular(w * .065)),
+      Paint()
+        ..color = const Color(0x885FB69A)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    final traces = Paint()
+      ..color = const Color(0xD46DBB9A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.2, w * .004)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final tracePaths = <List<Offset>>[
+      [at(.06, .63), at(.16, .63), at(.16, .68), at(.31, .68)],
+      [at(.05, .74), at(.20, .74), at(.20, .78), at(.39, .78)],
+      [at(.04, .85), at(.12, .85), at(.12, .81), at(.29, .81)],
+      [at(.35, .62), at(.35, .65), at(.48, .65), at(.48, .71)],
+      [at(.43, .75), at(.53, .75), at(.53, .82), at(.65, .82)],
+      [at(.42, .89), at(.56, .89), at(.56, .86), at(.71, .86)],
+      [at(.61, .61), at(.61, .67), at(.73, .67)],
+      [at(.72, .74), at(.86, .74), at(.86, .69), at(.95, .69)],
+      [at(.73, .91), at(.81, .91), at(.81, .87), at(.94, .87)],
+      [at(.90, .59), at(.90, .64), at(.96, .64)],
+    ];
+    for (final points in tracePaths) {
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path, traces);
+    }
+
+    // Main controller IC and its soldered pins.
+    final chip = Rect.fromLTWH(w * .09, h * .665, w * .25, h * .105);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chip, Radius.circular(w * .018)),
+      Paint()..color = const Color(0xE82B3038),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chip.deflate(w * .018), Radius.circular(w * .01)),
+      Paint()..color = const Color(0xC61A252A),
+    );
+    final pinPaint = Paint()..color = const Color(0xD9D6B881);
+    for (var i = 0; i < 6; i++) {
+      final y = chip.top + chip.height * (.14 + i * .14);
+      canvas.drawRect(
+        Rect.fromLTWH(chip.left - w * .018, y, w * .018, h * .007),
+        pinPaint,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(chip.right, y, w * .018, h * .007),
+        pinPaint,
+      );
+    }
+
+    // A second controller and small power components sit under the tinted shell.
+    final secondaryChip = Rect.fromLTWH(w * .69, h * .605, w * .17, h * .075);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(secondaryChip, Radius.circular(w * .012)),
+      Paint()..color = const Color(0xE02B3038),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        secondaryChip.deflate(w * .018),
+        Radius.circular(w * .008),
+      ),
+      Paint()..color = const Color(0xC51A252A),
+    );
+    for (final point in [
+      at(.43, .63),
+      at(.47, .63),
+      at(.51, .63),
+      at(.55, .63),
+      at(.39, .85),
+      at(.43, .85),
+      at(.47, .85),
+      at(.91, .78),
+      at(.94, .78),
+      at(.59, .91),
+      at(.64, .91),
+      at(.67, .91),
+    ]) {
+      canvas.drawCircle(
+        point,
+        w * .009,
+        Paint()..color = const Color(0xE9D3B77D),
+      );
+      canvas.drawCircle(
+        point,
+        w * .003,
+        Paint()..color = const Color(0xFFE7D9AE),
+      );
+    }
+
+    // Speaker coil and battery contacts make the translucent case read as hardware.
+    final speakerCenter = at(.81, .825);
+    final speakerRadius = w * .085;
+    canvas.drawCircle(
+      speakerCenter,
+      speakerRadius,
+      Paint()..color = const Color(0xA9252932),
+    );
+    final ring = Paint()
+      ..color = const Color(0xD481AFA0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    for (var ringIndex = 1; ringIndex <= 3; ringIndex++) {
+      canvas.drawCircle(speakerCenter, speakerRadius * ringIndex / 3, ring);
+    }
+    for (var i = 0; i < 20; i++) {
+      final angle = i * math.pi * 2 / 20;
+      final point =
+          speakerCenter +
+          Offset(math.cos(angle), math.sin(angle)) * speakerRadius * .76;
+      canvas.drawCircle(point, w * .004, pinPaint);
+    }
+
+    final battery = Rect.fromLTWH(w * .39, h * .87, w * .19, h * .045);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(battery, Radius.circular(h * .012)),
+      Paint()..color = const Color(0xC5A5A49A),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        battery.right,
+        battery.top + battery.height * .28,
+        w * .012,
+        battery.height * .44,
+      ),
+      Paint()..color = const Color(0xD9E0C88D),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        battery.deflate(w * .012),
+        Radius.circular(h * .006),
+      ),
+      Paint()..color = const Color(0x9A82967F),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DeviceInternalsPainter oldDelegate) => false;
+}
+
+class _GlassSheenPainter extends CustomPainter {
+  const _GlassSheenPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final top = Rect.fromLTWH(0, 0, size.width, size.height * .23);
+    canvas.drawRect(
+      top,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x24FFFFFF), Color(0x00FFFFFF)],
+        ).createShader(top),
+    );
+    final glint = Paint()
+      ..color = const Color(0x22FFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1, size.shortestSide * .003)
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..moveTo(size.width * .07, size.height * .035)
+      ..quadraticBezierTo(
+        size.width * .19,
+        size.height * .008,
+        size.width * .36,
+        size.height * .025,
+      );
+    canvas.drawPath(path, glint);
+  }
+
+  @override
+  bool shouldRepaint(_GlassSheenPainter oldDelegate) => false;
+}
+
+class _SpeakerPainter extends CustomPainter {
+  const _SpeakerPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.scale(size.width / 75);
+    canvas.rotate(-math.pi / 9);
+    for (var row = 0; row < 5; row++) {
+      for (var col = 0; col < 8; col++) {
+        canvas.drawCircle(
+          Offset(col * 8.0 - 28, row * 8.0 - 16),
+          1.8,
+          Paint()..color = const Color(0xFF77608F),
+        );
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SpeakerPainter oldDelegate) => false;
+}
