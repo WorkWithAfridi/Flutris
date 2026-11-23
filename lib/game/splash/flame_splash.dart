@@ -386,28 +386,20 @@ class _Wordmark extends PositionComponent {
   }
 }
 
-/// Bezel with the shell's asymmetric corner, border and hard offset shadow.
+/// Bezel with uniformly rounded corners, matching the game screen's display.
 class _DeviceBezel extends PositionComponent {
   _DeviceBezel();
 
   static const _rect = Rect.fromLTWH(26, 58, 248, 246);
+  static const _radius = Radius.circular(16);
 
-  RRect get _shape => RRect.fromRectAndCorners(
-        _rect,
-        topLeft: const Radius.circular(15),
-        topRight: const Radius.circular(15),
-        bottomLeft: const Radius.circular(15),
-        bottomRight: const Radius.circular(43),
-      );
+  RRect get _shape => RRect.fromRectAndRadius(_rect, _radius);
 
   @override
   void render(Canvas canvas) {
-    final shadowShape = RRect.fromRectAndCorners(
+    final shadowShape = RRect.fromRectAndRadius(
       _rect.shift(const Offset(0, 4)),
-      topLeft: const Radius.circular(15),
-      topRight: const Radius.circular(15),
-      bottomLeft: const Radius.circular(15),
-      bottomRight: const Radius.circular(43),
+      _radius,
     );
     canvas.drawRRect(shadowShape, Paint()..color = _ShellColors.shadow);
     canvas.drawRRect(_shape, Paint()..color = _ShellColors.bezel);
