@@ -14,6 +14,8 @@ class FeedbackService {
 
   static final FeedbackService instance = FeedbackService._();
 
+  static const String menuBgmAsset = 'menu_bgm.wav';
+
   bool soundEnabled = true;
   bool hapticsEnabled = true;
   bool audioReady = false;
@@ -27,6 +29,7 @@ class FeedbackService {
   final Map<FeedbackCue, DateTime> _lastPlayed = <FeedbackCue, DateTime>{};
   final Map<String, AudioPool> _pools = <String, AudioPool>{};
   Future<void>? _preloadFuture;
+  bool _menuMusicPlaying = false;
 
   /// Loads and pools all effects. Idempotent and never blocks the caller's
   /// game load: failures leave feedback silently disabled.
@@ -34,7 +37,10 @@ class FeedbackService {
 
   Future<void> _preload() async {
     try {
-      await FlameAudio.audioCache.loadAll(FeedbackCue.allAssets);
+      await FlameAudio.audioCache.loadAll([
+        ...FeedbackCue.allAssets,
+        menuBgmAsset,
+      ]);
       for (final asset in FeedbackCue.allAssets) {
         try {
           _pools[asset] = await FlameAudio.createPool(
@@ -49,6 +55,39 @@ class FeedbackService {
       audioReady = _pools.isNotEmpty;
     } catch (_) {
       audioReady = false;
+    }
+  }
+
+
+  /// Loops the retro menu track. Best-effort and safe to call repeatedly.
+  Future<void> startMenuMusic() async {
+    if (!soundEnabled || !audioReady || _menuMusicPlaying) return;
+    _menuMusicPlaying = true;
+    try {
+      await FlameAudio.bgm.initialize();
+      await FlameAudio.bgm.play(menuBgmAsset, volume: 0.28);
+    } catch (_) {
+      _menuMusicPlaying = false;
+    }
+  }
+
+  /// Stops the menu track when gameplay begins or sound is muted.
+  Future<void> stopMenuMusic() async {
+    if (!_menuMusicPlaying) return;
+    _menuMusicPlaying = false;
+    try {
+      await FlameAudio.bgm.stop();
+    } catch (_) {
+      // Feedback is best-effort.
+    }
+  }
+
+  /// Keeps music in sync with the sound toggle and current screen.
+  void syncMenuMusic({required bool inMenu}) {
+    if (soundEnabled && audioReady && inMenu) {
+      startMenuMusic();
+    } else {
+      stopMenuMusic();
     }
   }
 
