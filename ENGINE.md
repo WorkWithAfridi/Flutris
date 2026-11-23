@@ -344,10 +344,15 @@ FlutrisGame({
   TetrisEngine? engine,
   BoardPalette palette = lcdPalette,
   bool startInMenu = true,
+  bool renderHud = true,
+  bool compactMenu = false,
 });
 ```
 
-Public members: `engine`, `flow`, plus input forwarding:
+Public members: `engine`, `flow`, `onStateChanged`, `isHintVisible`, plus input
+forwarding. Set `renderHud: false` when Flutter renders a dedicated HUD; assign
+`onStateChanged` to refresh that Flutter UI after menu or engine changes. Set
+`compactMenu: true` when the Flutter panel already shows selected-mode details.
 
 ```dart
 game.menuUp(); game.menuDown(); game.confirm(); game.back();
@@ -447,7 +452,27 @@ fires `onFinished` once, and can be skipped by tapping (the overlay
 `Timer` in `SplashScreen` guarantees the transition if the game loop is
 paused by the platform.
 
-## 13. Current limitations
+## 13. Haptic and sound feedback
+
+`lib/feedback/` contains a single `FeedbackService` shared by the UI buttons
+and the game engine:
+
+- `feedback_cue.dart` maps each cue to a WAV asset, a `HapticFeedback` style,
+  a volume and an optional anti-spam throttle. `FeedbackCue.forEvent()` maps
+  `TetrisEvent` values to cues (a 4-line clear becomes the Tetris cue).
+- `feedback_service.dart` owns the enable flags, fire-and-forget playback and
+  platform-error guards. Audio is silent until `preload()` succeeds; the game
+  calls it fire-and-forget in `onLoad` so loading is never blocked.
+- Every tactile `_ConsoleButton` calls `FeedbackService.instance.press()`.
+- `FlutrisGame` forwards engine events through `FeedbackCue.forEvent()` and
+  plays `navigate` / `press` cues for keyboard menu input.
+- Toggle sound at runtime with `FeedbackService.instance.toggleSound()` or the
+  **M** key; `toggleHaptics()` disables vibration independently.
+
+Assets live in `assets/audio/` and are short procedurally generated WAVs
+(22.05 kHz mono). New cues: add a WAV and a `FeedbackCue` constant.
+
+## 14. Current limitations
 
 - No audio: `onEvent` is the hook for a future sound layer (e.g. `flame_audio`).
 - No hold/preview rendering in `BoardComponent` yet; the HUD shows mode,
