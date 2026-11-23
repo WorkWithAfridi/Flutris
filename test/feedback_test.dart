@@ -57,7 +57,7 @@ void main() {
       service.play(FeedbackCue.move);
       expect(cues, hasLength(1));
 
-      clock = clock.add(const Duration(milliseconds: 50));
+      clock = clock.add(const Duration(milliseconds: 100));
       service.play(FeedbackCue.move);
       expect(cues, hasLength(2));
     });

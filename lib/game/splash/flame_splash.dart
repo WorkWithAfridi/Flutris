@@ -6,6 +6,8 @@ import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/animation.dart' show Curves;
+
+import '../../feedback/feedback_service.dart';
 import 'package:flutter/painting.dart'
     show Alignment, FontStyle, FontWeight, LinearGradient, TextStyle;
 
@@ -49,6 +51,8 @@ class FlameSplash extends FlameGame {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    // Audio is ready by the time the splash hands over to the game.
+    FeedbackService.instance.preload();
     _backdrop = _ShellBackdrop();
     _scene = _SplashScene(
       duration: duration,

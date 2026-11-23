@@ -20,31 +20,31 @@ class FeedbackCue {
   static const tap = FeedbackCue(
     'tap.wav',
     haptic: FeedbackHaptic.selection,
-    throttle: Duration(milliseconds: 40),
+    throttle: Duration(milliseconds: 70),
     volume: .55,
   );
   static const navigate = FeedbackCue(
     'navigate.wav',
     haptic: FeedbackHaptic.light,
-    throttle: Duration(milliseconds: 45),
+    throttle: Duration(milliseconds: 60),
     volume: .6,
   );
   static const move = FeedbackCue(
     'move.wav',
     haptic: FeedbackHaptic.light,
-    throttle: Duration(milliseconds: 45),
+    throttle: Duration(milliseconds: 60),
     volume: .45,
   );
   static const rotate = FeedbackCue(
     'rotate.wav',
     haptic: FeedbackHaptic.selection,
-    throttle: Duration(milliseconds: 35),
+    throttle: Duration(milliseconds: 50),
     volume: .6,
   );
   static const softDrop = FeedbackCue(
     'soft_drop.wav',
     haptic: FeedbackHaptic.light,
-    throttle: Duration(milliseconds: 55),
+    throttle: Duration(milliseconds: 60),
     volume: .35,
   );
   static const hardDrop = FeedbackCue(

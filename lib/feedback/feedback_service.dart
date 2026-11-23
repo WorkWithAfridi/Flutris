@@ -6,8 +6,9 @@ import 'feedback_cue.dart';
 /// Shared haptic + sound feedback for the UI buttons and the game engine.
 ///
 /// One instance serves both worlds so a single sound toggle controls
-/// everything. Audio is silent until [preload] succeeds, which also keeps
-/// widget tests free of plugin-channel errors.
+/// everything. Sounds come from preallocated [AudioPool]s: creating a fresh
+/// `AudioPlayer` on every tap leaks players and makes audio stop working after
+/// a while, which pooling avoids. Audio is silent until [preload] succeeds.
 class FeedbackService {
   FeedbackService._();
 
@@ -24,12 +25,28 @@ class FeedbackService {
   void Function(FeedbackCue cue)? onCue;
 
   final Map<FeedbackCue, DateTime> _lastPlayed = <FeedbackCue, DateTime>{};
+  final Map<String, AudioPool> _pools = <String, AudioPool>{};
+  Future<void>? _preloadFuture;
 
-  /// Loads all effects into Flame's audio cache. Call once during game load.
-  Future<void> preload() async {
+  /// Loads and pools all effects. Idempotent and never blocks the caller's
+  /// game load: failures leave feedback silently disabled.
+  Future<void> preload() => _preloadFuture ??= _preload();
+
+  Future<void> _preload() async {
     try {
       await FlameAudio.audioCache.loadAll(FeedbackCue.allAssets);
-      audioReady = true;
+      for (final asset in FeedbackCue.allAssets) {
+        try {
+          _pools[asset] = await FlameAudio.createPool(
+            asset,
+            minPlayers: 1,
+            maxPlayers: 2,
+          );
+        } catch (_) {
+          // One bad asset must not silence every other cue.
+        }
+      }
+      audioReady = _pools.isNotEmpty;
     } catch (_) {
       audioReady = false;
     }
@@ -79,7 +96,9 @@ class FeedbackService {
 
   void _sound(FeedbackCue cue) {
     if (!soundEnabled || !audioReady) return;
-    _guard(() => FlameAudio.play(cue.asset, volume: cue.volume));
+    final pool = _pools[cue.asset];
+    if (pool == null) return;
+    _guard(() => pool.start(volume: cue.volume));
   }
 
   /// Never let a platform-channel failure escape into the game loop.
