@@ -63,7 +63,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: const Color(0xFF2B2438),
                 child: Stack(
                   children: [
-                    Center(child: GameWidget<FlameSplash>(game: _splash)),
+                    SizedBox.expand(child: GameWidget<FlameSplash>(game: _splash)),
                     // Placed above the game so it receives taps first;
                     // GameWidget's own opaque hit test would swallow them.
                     Positioned.fill(
