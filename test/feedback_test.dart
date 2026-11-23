@@ -71,6 +71,14 @@ void main() {
       expect(cues, hasLength(2));
     });
 
+    test('menu music calls are safe before audio is ready', () async {
+      service.soundEnabled = true;
+      await service.startMenuMusic();
+      await service.stopMenuMusic();
+      service.syncMenuMusic(inMenu: true);
+      expect(service.audioReady, isFalse);
+    });
+
     test('sound and haptics toggles flip both ways', () {
       expect(service.toggleSound(), isFalse);
       expect(service.soundEnabled, isFalse);
