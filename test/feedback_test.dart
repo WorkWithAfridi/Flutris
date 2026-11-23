@@ -79,6 +79,16 @@ void main() {
       expect(service.audioReady, isFalse);
     });
 
+    test('menu and game music switch the active screen', () async {
+      service.soundEnabled = true;
+      await service.startMenuMusic();
+      expect(service.screen, FeedbackScreen.menu);
+      await service.startGameMusic();
+      expect(service.screen, FeedbackScreen.game);
+      await service.stopMenuMusic();
+      expect(service.screen, FeedbackScreen.none);
+    });
+
     test('sound and haptics toggles flip both ways', () {
       expect(service.toggleSound(), isFalse);
       expect(service.soundEnabled, isFalse);
