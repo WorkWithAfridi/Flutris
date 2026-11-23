@@ -34,8 +34,33 @@ class _HandheldScreenState extends State<HandheldScreen> {
     super.dispose();
   }
 
+  String _lastUiSignature = '';
+  bool _refreshScheduled = false;
+
+  /// Only the values actually shown by this widget belong here. Engine events
+  /// fire several times per second; rebuilding for every one of them is what
+  /// made rapid button presses feel laggy.
+  String get _uiSignature {
+    final engine = _game.engine;
+    final flow = _game.flow;
+    return '${flow.state.index}|${flow.selected}|${engine.status.index}|'
+        '${engine.score}|${engine.lines}|${engine.level}|${engine.combo}|'
+        '${engine.holdPiece?.index ?? -1}|${engine.canHold}|'
+        '${_game.isHintVisible}|${engine.mode.mode.index}|'
+        '${flow.bestScores[engine.mode.mode] ?? 0}';
+  }
+
   void _refreshFromGame() {
-    if (mounted) setState(() {});
+    if (!mounted || _refreshScheduled) return;
+    _refreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
+      if (!mounted) return;
+      final signature = _uiSignature;
+      if (signature == _lastUiSignature) return;
+      _lastUiSignature = signature;
+      setState(() {});
+    });
   }
 
   bool get _hintsAvailable =>
@@ -43,6 +68,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _lastUiSignature = _uiSignature;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
