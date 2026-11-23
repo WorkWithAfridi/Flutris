@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flame/game.dart' show GameWidget;
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../feedback/feedback_service.dart';
 import '../game/flutris_game.dart';
 import '../game/tetris.dart';
 
@@ -18,13 +18,12 @@ class HandheldScreen extends StatefulWidget {
 }
 
 class _HandheldScreenState extends State<HandheldScreen> {
-  bool _sound = true;
   late final FlutrisGame _game;
 
   @override
   void initState() {
     super.initState();
-    _game = FlutrisGame(renderHud: false);
+    _game = FlutrisGame(renderHud: false, compactMenu: true);
     _game.onStateChanged = _refreshFromGame;
   }
 
@@ -38,6 +37,9 @@ class _HandheldScreenState extends State<HandheldScreen> {
   void _refreshFromGame() {
     if (mounted) setState(() {});
   }
+
+  bool get _hintsAvailable =>
+      _game.flow.isPlaying && _game.engine.mode.allowHints;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +59,6 @@ class _HandheldScreenState extends State<HandheldScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              const IgnorePointer(
-                child: CustomPaint(painter: _DeviceInternalsPainter()),
-              ),
               const IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -139,7 +138,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
       : const Color(0xFF9ACD7E);
 
   String get _statusLabel => switch (_game.flow.state) {
-    FlowState.menu => 'SELECT MODE',
+    FlowState.menu => 'READY',
     FlowState.playing => 'PLAYING',
     FlowState.paused => 'PAUSED',
     FlowState.gameOver => 'GAME OVER',
@@ -152,10 +151,15 @@ class _HandheldScreenState extends State<HandheldScreen> {
     children: [
       SizedBox(width: 46 * scale),
       _smallControl(
-        _sound ? 'SOUND ON' : 'SOUND OFF',
-        'Toggle sound',
-        () => setState(() => _sound = !_sound),
+        !_hintsAvailable
+            ? 'NO HINT'
+            : _game.isHintVisible
+            ? 'HINT ON'
+            : 'HINT',
+        _hintsAvailable ? 'Toggle placement hint' : 'Hints unavailable',
+        _game.toggleHint,
         scale,
+        enabled: _hintsAvailable,
       ),
       SizedBox(width: 12 * scale),
       _smallControl(
@@ -163,6 +167,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
         'Hold piece',
         _game.hold,
         scale,
+        enabled: _game.engine.canHold,
       ),
       SizedBox(width: 12 * scale),
       _smallControl(
@@ -184,14 +189,14 @@ class _HandheldScreenState extends State<HandheldScreen> {
   );
 
   String get _pauseControlLabel => switch (_game.flow.state) {
-    FlowState.menu => 'BACK',
+    FlowState.menu => 'START',
     FlowState.paused => 'RESUME',
     FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'MENU',
     FlowState.playing => 'PAUSE',
   };
 
   String get _pauseControlSemantics => switch (_game.flow.state) {
-    FlowState.menu => 'Back to menu',
+    FlowState.menu => 'Start selected mode',
     FlowState.paused => 'Resume game',
     FlowState.gameOver ||
     FlowState.victory ||
@@ -200,7 +205,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
   };
 
   VoidCallback get _pauseControl => switch (_game.flow.state) {
-    FlowState.menu => _game.back,
+    FlowState.menu => _game.confirm,
     FlowState.paused || FlowState.playing => _game.togglePause,
     FlowState.gameOver ||
     FlowState.victory ||
@@ -212,12 +217,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
       decoration: BoxDecoration(
         color: const Color(0xFF302D3E),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(15),
-          topRight: Radius.circular(15),
-          bottomLeft: Radius.circular(15),
-          bottomRight: Radius.circular(43),
-        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF493E53), width: 2),
         boxShadow: const [
           BoxShadow(
@@ -265,41 +265,41 @@ class _HandheldScreenState extends State<HandheldScreen> {
                 color: const Color(0xFFB5C49D),
                 border: Border.all(color: const Color(0xFF171E20), width: 3),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Column(
-                    children: [
-                      _lcdHeader(),
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              flex: 58,
-                              child: Center(
-                                child: AspectRatio(
-                                  aspectRatio: 0.5,
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Column(
+                      children: [
+                        _lcdHeader(),
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 58,
+                                child: ClipRect(
                                   child: GameWidget<FlutrisGame>(game: _game),
                                 ),
                               ),
-                            ),
-                            Container(
-                              width: 1,
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              color: _ink.withValues(alpha: .24),
-                            ),
-                            Expanded(
-                              flex: 42,
-                              child: _enginePanel(
-                                constraints.maxWidth * .42 - 1,
+                              Container(
+                                width: 1,
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                color: _ink.withValues(alpha: .24),
                               ),
-                            ),
-                          ],
+                              Expanded(
+                                flex: 42,
+                                child: _enginePanel(
+                                  constraints.maxWidth * .42 - 1,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -316,9 +316,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
 
   Widget _lcdHeader() {
     final flow = _game.flow;
-    final modeName = flow.isMenu
-        ? flow.selectedMode.name
-        : _game.engine.mode.name;
+    final modeName = flow.isMenu ? 'MODE SELECT' : _game.engine.mode.name;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 7, 8, 2),
       child: Row(
@@ -346,7 +344,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
             _metric('GOAL', mode.goalLabel, width),
             const SizedBox(height: 12),
             _metric('BEST', _scoreText(flow.bestScores[mode.mode] ?? 0), width),
-            const Spacer(),
+            const SizedBox(height: 18),
             Text(
               mode.tagline,
               maxLines: 2,
@@ -359,8 +357,13 @@ class _HandheldScreenState extends State<HandheldScreen> {
               ),
             ),
             const SizedBox(height: 6),
+            Text(
+              mode.description,
+              style: const TextStyle(fontSize: 7, height: 1.35, color: _ink),
+            ),
+            const Spacer(),
             const Text(
-              'UP / DOWN\nA TO START',
+              'D-PAD SELECT\nA TO START',
               style: TextStyle(
                 fontSize: 6,
                 height: 1.5,
@@ -476,6 +479,9 @@ class _HandheldScreenState extends State<HandheldScreen> {
 
   String get _upSemantics => _game.flow.isMenu ? 'Previous mode' : 'Hard drop';
   String get _downSemantics => _game.flow.isMenu ? 'Next mode' : 'Soft drop';
+  String get _leftSemantics =>
+      _game.flow.isMenu ? 'Previous mode' : 'Move left';
+  String get _rightSemantics => _game.flow.isMenu ? 'Next mode' : 'Move right';
   String get _aCaption => _game.flow.isMenu
       ? 'START'
       : _game.flow.isEndScreen
@@ -484,12 +490,12 @@ class _HandheldScreenState extends State<HandheldScreen> {
   String get _aSemantics =>
       _game.flow.isMenu || _game.flow.isEndScreen ? 'Confirm' : 'Rotate piece';
   String get _bCaption => _game.flow.isMenu
-      ? 'BACK'
+      ? 'NEXT'
       : _game.flow.isEndScreen
       ? 'MENU'
       : 'DROP';
   String get _bSemantics => _game.flow.isMenu
-      ? 'Back'
+      ? 'Next mode'
       : _game.flow.isEndScreen
       ? 'Return to menu'
       : 'Drop piece';
@@ -506,12 +512,18 @@ class _HandheldScreenState extends State<HandheldScreen> {
       ? _game.confirm
       : _game.moveDown;
 
+  VoidCallback get _leftAction =>
+      _game.flow.isMenu ? _game.menuUp : _game.moveLeft;
+
+  VoidCallback get _rightAction =>
+      _game.flow.isMenu ? _game.menuDown : _game.moveRight;
+
   VoidCallback get _aAction => _game.flow.isMenu || _game.flow.isEndScreen
       ? _game.confirm
       : _game.rotate;
 
   VoidCallback get _bAction => _game.flow.isMenu
-      ? _game.back
+      ? _game.menuDown
       : _game.flow.isEndScreen
       ? _game.confirm
       : _game.hardDrop;
@@ -569,22 +581,22 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     left: 9 * scale,
                     top: stemPosition,
                     child: _direction(
-                      'Move left',
+                      _leftSemantics,
                       '←',
                       const BorderRadius.horizontal(left: Radius.circular(6)),
                       scale,
-                      _game.moveLeft,
+                      _leftAction,
                     ),
                   ),
                   Positioned(
                     right: 9 * scale,
                     top: stemPosition,
                     child: _direction(
-                      'Move right',
+                      _rightSemantics,
                       '→',
                       const BorderRadius.horizontal(right: Radius.circular(6)),
                       scale,
-                      _game.moveRight,
+                      _rightAction,
                     ),
                   ),
                   Container(
@@ -678,8 +690,9 @@ class _HandheldScreenState extends State<HandheldScreen> {
     String text,
     String label,
     VoidCallback onTap,
-    double scale,
-  ) => Column(
+    double scale, {
+    bool enabled = true,
+  }) => Column(
     children: [
       Transform.rotate(
         angle: -.15,
@@ -688,7 +701,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
           width: 44 * scale,
           height: 15 * scale,
           radius: BorderRadius.circular(10 * scale),
-          onTap: onTap,
+          onTap: enabled ? onTap : null,
           child: const SizedBox(),
         ),
       ),
@@ -783,21 +796,28 @@ class _ConsoleButtonState extends State<_ConsoleButton> {
   bool _pressed = false;
 
   void _activate() {
-    HapticFeedback.selectionClick();
-    widget.onTap?.call();
+    final onTap = widget.onTap;
+    if (onTap == null) return;
+    FeedbackService.instance.press();
+    onTap();
   }
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    enabled: widget.onTap != null,
     label: widget.label,
-    onTap: _activate,
+    onTap: widget.onTap == null ? null : _activate,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapDown: widget.onTap == null
+          ? null
+          : (_) => setState(() => _pressed = true),
+      onTapUp: widget.onTap == null
+          ? null
+          : (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
-      onTap: _activate,
+      onTap: widget.onTap == null ? null : _activate,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 65),
         transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
@@ -851,166 +871,6 @@ class _Label extends StatelessWidget {
       fontWeight: FontWeight.w700,
     ),
   );
-}
-
-class _DeviceInternalsPainter extends CustomPainter {
-  const _DeviceInternalsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    Offset at(double x, double y) => Offset(w * x, h * y);
-
-    final pcbRect = Rect.fromLTWH(w * .035, h * .57, w * .93, h * .37);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(pcbRect, Radius.circular(w * .065)),
-      Paint()..color = const Color(0xB8203D3C),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(pcbRect, Radius.circular(w * .065)),
-      Paint()
-        ..color = const Color(0x885FB69A)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-
-    final traces = Paint()
-      ..color = const Color(0xD46DBB9A)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.2, w * .004)
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final tracePaths = <List<Offset>>[
-      [at(.06, .63), at(.16, .63), at(.16, .68), at(.31, .68)],
-      [at(.05, .74), at(.20, .74), at(.20, .78), at(.39, .78)],
-      [at(.04, .85), at(.12, .85), at(.12, .81), at(.29, .81)],
-      [at(.35, .62), at(.35, .65), at(.48, .65), at(.48, .71)],
-      [at(.43, .75), at(.53, .75), at(.53, .82), at(.65, .82)],
-      [at(.42, .89), at(.56, .89), at(.56, .86), at(.71, .86)],
-      [at(.61, .61), at(.61, .67), at(.73, .67)],
-      [at(.72, .74), at(.86, .74), at(.86, .69), at(.95, .69)],
-      [at(.73, .91), at(.81, .91), at(.81, .87), at(.94, .87)],
-      [at(.90, .59), at(.90, .64), at(.96, .64)],
-    ];
-    for (final points in tracePaths) {
-      final path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final point in points.skip(1)) {
-        path.lineTo(point.dx, point.dy);
-      }
-      canvas.drawPath(path, traces);
-    }
-
-    // Main controller IC and its soldered pins.
-    final chip = Rect.fromLTWH(w * .09, h * .665, w * .25, h * .105);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(chip, Radius.circular(w * .018)),
-      Paint()..color = const Color(0xE82B3038),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(chip.deflate(w * .018), Radius.circular(w * .01)),
-      Paint()..color = const Color(0xC61A252A),
-    );
-    final pinPaint = Paint()..color = const Color(0xD9D6B881);
-    for (var i = 0; i < 6; i++) {
-      final y = chip.top + chip.height * (.14 + i * .14);
-      canvas.drawRect(
-        Rect.fromLTWH(chip.left - w * .018, y, w * .018, h * .007),
-        pinPaint,
-      );
-      canvas.drawRect(
-        Rect.fromLTWH(chip.right, y, w * .018, h * .007),
-        pinPaint,
-      );
-    }
-
-    // A second controller and small power components sit under the tinted shell.
-    final secondaryChip = Rect.fromLTWH(w * .69, h * .605, w * .17, h * .075);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(secondaryChip, Radius.circular(w * .012)),
-      Paint()..color = const Color(0xE02B3038),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        secondaryChip.deflate(w * .018),
-        Radius.circular(w * .008),
-      ),
-      Paint()..color = const Color(0xC51A252A),
-    );
-    for (final point in [
-      at(.43, .63),
-      at(.47, .63),
-      at(.51, .63),
-      at(.55, .63),
-      at(.39, .85),
-      at(.43, .85),
-      at(.47, .85),
-      at(.91, .78),
-      at(.94, .78),
-      at(.59, .91),
-      at(.64, .91),
-      at(.67, .91),
-    ]) {
-      canvas.drawCircle(
-        point,
-        w * .009,
-        Paint()..color = const Color(0xE9D3B77D),
-      );
-      canvas.drawCircle(
-        point,
-        w * .003,
-        Paint()..color = const Color(0xFFE7D9AE),
-      );
-    }
-
-    // Speaker coil and battery contacts make the translucent case read as hardware.
-    final speakerCenter = at(.81, .825);
-    final speakerRadius = w * .085;
-    canvas.drawCircle(
-      speakerCenter,
-      speakerRadius,
-      Paint()..color = const Color(0xA9252932),
-    );
-    final ring = Paint()
-      ..color = const Color(0xD481AFA0)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    for (var ringIndex = 1; ringIndex <= 3; ringIndex++) {
-      canvas.drawCircle(speakerCenter, speakerRadius * ringIndex / 3, ring);
-    }
-    for (var i = 0; i < 20; i++) {
-      final angle = i * math.pi * 2 / 20;
-      final point =
-          speakerCenter +
-          Offset(math.cos(angle), math.sin(angle)) * speakerRadius * .76;
-      canvas.drawCircle(point, w * .004, pinPaint);
-    }
-
-    final battery = Rect.fromLTWH(w * .39, h * .87, w * .19, h * .045);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(battery, Radius.circular(h * .012)),
-      Paint()..color = const Color(0xC5A5A49A),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        battery.right,
-        battery.top + battery.height * .28,
-        w * .012,
-        battery.height * .44,
-      ),
-      Paint()..color = const Color(0xD9E0C88D),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        battery.deflate(w * .012),
-        Radius.circular(h * .006),
-      ),
-      Paint()..color = const Color(0x9A82967F),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_DeviceInternalsPainter oldDelegate) => false;
 }
 
 class _GlassSheenPainter extends CustomPainter {

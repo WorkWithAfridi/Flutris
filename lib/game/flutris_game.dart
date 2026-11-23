@@ -9,6 +9,8 @@ import 'package:flutter/widgets.dart' show KeyEventResult;
 import 'components/board_component.dart';
 import 'components/flow_overlay.dart';
 import 'components/line_clear_effect.dart';
+import '../feedback/feedback_cue.dart';
+import '../feedback/feedback_service.dart';
 import 'tetris.dart';
 
 /// Flame game that hosts the mode menu, the rules engine and the render tree.
@@ -18,14 +20,15 @@ import 'tetris.dart';
 /// keyboard input and the game canvas. Rules live in the pure-Dart
 /// [TetrisEngine]; navigation lives in [GameFlow].
 ///
-/// On-screen buttons call the public input methods; the menu is rendered
-/// inside the LCD, so the Flutter UI needs no changes.
+/// The handheld shell forwards touch input through the public methods and can
+/// subscribe to [onStateChanged] to mirror engine state in Flutter widgets.
 class FlutrisGame extends FlameGame with KeyboardEvents {
   FlutrisGame({
     TetrisEngine? engine,
     this.palette = lcdPalette,
     this.startInMenu = true,
     this.renderHud = true,
+    this.compactMenu = false,
   }) : _engine = engine ?? TetrisEngine() {
     flow = GameFlow(onStart: _startMode);
   }
@@ -42,11 +45,16 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
   /// engine state in a dedicated panel.
   final bool renderHud;
 
+  /// Whether the Flame menu leaves mode details to an external Flutter panel.
+  final bool compactMenu;
+
   /// Notifies a Flutter shell about menu and engine state changes.
   void Function()? onStateChanged;
 
   TetrisEngine _engine;
   TetrisEngine get engine => _engine;
+
+  bool get isHintVisible => isLoaded && _overlay.showHint;
 
   late final GameFlow flow;
   late final BoardComponent _board;
@@ -73,10 +81,13 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
       palette: palette,
       engine: _engine,
       renderHud: renderHud,
+      compactMenu: compactMenu,
       priority: 3,
     );
     await add(_board);
     await add(_overlay);
+    // Fire-and-forget: audio setup must never block the game from loading.
+    FeedbackService.instance.preload();
     _wireEngine(_engine);
 
     if (startInMenu) {
@@ -89,11 +100,18 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
 
   void _wireEngine(TetrisEngine engine) {
     engine.onLinesCleared = _spawnLineClearEffect;
+    final previousOnChanged = engine.onChanged;
     engine.onChanged = () {
+      previousOnChanged?.call();
       flow.sync(engine);
       onStateChanged?.call();
     };
     engine.onEvent = (event) {
+      final cue = FeedbackCue.forEvent(
+        event,
+        clearedLines: engine.lastClearedRows.length,
+      );
+      if (cue != null) FeedbackService.instance.play(cue);
       if (event == TetrisEvent.victory ||
           event == TetrisEvent.gameOver ||
           event == TetrisEvent.timeUp) {
@@ -104,10 +122,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
   }
 
   void _startMode(ModeConfig mode) {
-    _engine = TetrisEngine(
-      mode: mode,
-      best: flow.bestScores[mode.mode],
-    );
+    _engine = TetrisEngine(mode: mode, best: flow.bestScores[mode.mode]);
     _board.engine = _engine;
     _overlay.engine = _engine;
     _wireEngine(_engine);
@@ -117,12 +132,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
 
   void _spawnLineClearEffect(List<int> rows) {
     add(
-      LineClearEffect(
-        rows: rows,
-        board: _board,
-        palette: palette,
-        priority: 2,
-      ),
+      LineClearEffect(rows: rows, board: _board, palette: palette, priority: 2),
     );
   }
 
@@ -144,8 +154,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
 
     if (left != right) {
       _horizontalRepeat += dt;
-      final threshold =
-          _horizontalRepeat <= _initialDelay ? _initialDelay : _repeatInterval;
+      final threshold = _horizontalRepeat <= _initialDelay
+          ? _initialDelay
+          : _repeatInterval;
       if (_horizontalRepeat >= threshold) {
         _horizontalRepeat = 0;
         if (left) {
@@ -184,13 +195,13 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     final key = event.logicalKey;
     if (flow.isMenu) {
       if (key == LogicalKeyboardKey.arrowUp) {
-        flow.move(-1);
+        menuUp();
       } else if (key == LogicalKeyboardKey.arrowDown) {
-        flow.move(1);
+        menuDown();
       } else if (key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.space ||
           key == LogicalKeyboardKey.keyZ) {
-        flow.confirm();
+        confirm();
       } else {
         return KeyEventResult.ignored;
       }
@@ -201,7 +212,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
       if (key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.space ||
           key == LogicalKeyboardKey.keyZ) {
-        flow.toMenu();
+        confirm();
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -211,7 +222,8 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyA) {
       return KeyEventResult.handled; // held movement handled in update()
     }
-    if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyD) {
+    if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.keyD) {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowDown) {
@@ -232,6 +244,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     } else if (key == LogicalKeyboardKey.keyP ||
         key == LogicalKeyboardKey.escape) {
       togglePause();
+    } else if (key == LogicalKeyboardKey.keyM) {
+      FeedbackService.instance.toggleSound();
+      FeedbackService.instance.press();
     } else if (key == LogicalKeyboardKey.keyR) {
       restart();
     } else {
@@ -286,5 +301,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     onStateChanged?.call();
   }
 
-  void toggleHint() => _overlay.showHint = !_overlay.showHint;
+  void toggleHint() {
+    if (!isLoaded || !_engine.mode.allowHints) return;
+    _overlay.showHint = !_overlay.showHint;
+    onStateChanged?.call();
+  }
 }
