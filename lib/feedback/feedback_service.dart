@@ -18,7 +18,6 @@ class FeedbackService {
   static final FeedbackService instance = FeedbackService._();
 
   static const String menuBgmAsset = 'menu_bgm.wav';
-  static const String gameBgmAsset = 'game_bgm.wav';
 
   bool soundEnabled = true;
   bool hapticsEnabled = true;
@@ -45,7 +44,6 @@ class FeedbackService {
       await FlameAudio.audioCache.loadAll([
         ...FeedbackCue.allAssets,
         menuBgmAsset,
-        gameBgmAsset,
       ]);
       for (final asset in FeedbackCue.allAssets) {
         try {
@@ -87,8 +85,12 @@ class FeedbackService {
       _stopMusic();
       return;
     }
-    final track = screen == FeedbackScreen.menu ? menuBgmAsset : gameBgmAsset;
-    if (_currentTrack == track) return;
+    if (screen != FeedbackScreen.menu) {
+      _stopMusic();
+      return;
+    }
+    if (_currentTrack == menuBgmAsset) return;
+    final track = menuBgmAsset;
     _switchTrack(track);
   }
 
@@ -96,10 +98,7 @@ class FeedbackService {
     try {
       await FlameAudio.bgm.stop();
       await FlameAudio.bgm.initialize();
-      await FlameAudio.bgm.play(
-        track,
-        volume: track == gameBgmAsset ? 0.12 : 0.28,
-      );
+      await FlameAudio.bgm.play(track, volume: 0.28);
       _currentTrack = track;
     } catch (_) {
       _currentTrack = null;
