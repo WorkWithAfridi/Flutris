@@ -125,10 +125,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
           shape: BoxShape.circle,
           color: _statusColor,
           boxShadow: [
-            BoxShadow(
-              color: _statusColor.withValues(alpha: .5),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: _statusColor.withValues(alpha: .5), blurRadius: 8),
           ],
         ),
       ),
@@ -168,8 +165,12 @@ class _HandheldScreenState extends State<HandheldScreen> {
         scale,
       ),
       SizedBox(width: 12 * scale),
-      _smallControl(_pauseControlLabel, _pauseControlSemantics, _pauseControl,
-          scale),
+      _smallControl(
+        _pauseControlLabel,
+        _pauseControlSemantics,
+        _pauseControl,
+        scale,
+      ),
       const Spacer(),
       Padding(
         padding: EdgeInsets.only(top: 12 * scale),
@@ -192,14 +193,18 @@ class _HandheldScreenState extends State<HandheldScreen> {
   String get _pauseControlSemantics => switch (_game.flow.state) {
     FlowState.menu => 'Back to menu',
     FlowState.paused => 'Resume game',
-    FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'Return to menu',
+    FlowState.gameOver ||
+    FlowState.victory ||
+    FlowState.timeUp => 'Return to menu',
     FlowState.playing => 'Pause game',
   };
 
   VoidCallback get _pauseControl => switch (_game.flow.state) {
     FlowState.menu => _game.back,
     FlowState.paused || FlowState.playing => _game.togglePause,
-    FlowState.gameOver || FlowState.victory || FlowState.timeUp => _game.confirm,
+    FlowState.gameOver ||
+    FlowState.victory ||
+    FlowState.timeUp => _game.confirm,
   };
 
   Widget _display() => SizedBox.expand(
@@ -438,7 +443,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
       _Label(label, size: 6, spacing: .6),
       const SizedBox(height: 2),
       SizedBox(
-        width: math.max(0, width - 4),
+        width: math.max(0.0, width - 4),
         child: FittedBox(
           alignment: Alignment.centerLeft,
           fit: BoxFit.scaleDown,
@@ -468,6 +473,48 @@ class _HandheldScreenState extends State<HandheldScreen> {
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+
+  String get _upSemantics => _game.flow.isMenu ? 'Previous mode' : 'Hard drop';
+  String get _downSemantics => _game.flow.isMenu ? 'Next mode' : 'Soft drop';
+  String get _aCaption => _game.flow.isMenu
+      ? 'START'
+      : _game.flow.isEndScreen
+      ? 'MENU'
+      : 'ROTATE';
+  String get _aSemantics =>
+      _game.flow.isMenu || _game.flow.isEndScreen ? 'Confirm' : 'Rotate piece';
+  String get _bCaption => _game.flow.isMenu
+      ? 'BACK'
+      : _game.flow.isEndScreen
+      ? 'MENU'
+      : 'DROP';
+  String get _bSemantics => _game.flow.isMenu
+      ? 'Back'
+      : _game.flow.isEndScreen
+      ? 'Return to menu'
+      : 'Drop piece';
+
+  VoidCallback get _upAction => _game.flow.isMenu
+      ? _game.menuUp
+      : _game.flow.isEndScreen
+      ? _game.confirm
+      : _game.hardDrop;
+
+  VoidCallback get _downAction => _game.flow.isMenu
+      ? _game.menuDown
+      : _game.flow.isEndScreen
+      ? _game.confirm
+      : _game.moveDown;
+
+  VoidCallback get _aAction => _game.flow.isMenu || _game.flow.isEndScreen
+      ? _game.confirm
+      : _game.rotate;
+
+  VoidCallback get _bAction => _game.flow.isMenu
+      ? _game.back
+      : _game.flow.isEndScreen
+      ? _game.confirm
+      : _game.hardDrop;
 
   Widget _controls(double scale) {
     final dpadSize = 135 * scale;
@@ -500,22 +547,22 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     top: 9 * scale,
                     left: stemPosition,
                     child: _direction(
-                      'Hard drop',
+                      _upSemantics,
                       '↑',
                       const BorderRadius.vertical(top: Radius.circular(6)),
                       scale,
-                      _game.hardDrop,
+                      _upAction,
                     ),
                   ),
                   Positioned(
                     bottom: 9 * scale,
                     left: stemPosition,
                     child: _direction(
-                      'Move down',
+                      _downSemantics,
                       '↓',
                       const BorderRadius.vertical(bottom: Radius.circular(6)),
                       scale,
-                      _game.moveDown,
+                      _downAction,
                     ),
                   ),
                   Positioned(
@@ -560,20 +607,8 @@ class _HandheldScreenState extends State<HandheldScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _actionButton(
-                    'B',
-                    'DROP',
-                    'Drop piece',
-                    scale,
-                    _game.hardDrop,
-                  ),
-                  _actionButton(
-                    'A',
-                    'ROTATE',
-                    'Rotate piece',
-                    scale,
-                    _game.rotate,
-                  ),
+                  _actionButton('B', _bCaption, _bSemantics, scale, _bAction),
+                  _actionButton('A', _aCaption, _aSemantics, scale, _aAction),
                 ],
               ),
             ),
@@ -661,6 +696,65 @@ class _HandheldScreenState extends State<HandheldScreen> {
       _Label(text, size: 7 * scale, spacing: 1 * scale),
     ],
   );
+}
+
+class _PiecePreview extends StatelessWidget {
+  const _PiecePreview({required this.type, this.width = 54, this.height = 48});
+
+  final PieceType? type;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size(width, height),
+    painter: _PiecePreviewPainter(type),
+  );
+}
+
+class _PiecePreviewPainter extends CustomPainter {
+  const _PiecePreviewPainter(this.type);
+
+  final PieceType? type;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final piece = type;
+    if (piece == null) return;
+    final cells = Tetromino.cells(piece, 0);
+    final minX = cells.map((cell) => cell.x).reduce(math.min);
+    final maxX = cells.map((cell) => cell.x).reduce(math.max);
+    final minY = cells.map((cell) => cell.y).reduce(math.min);
+    final maxY = cells.map((cell) => cell.y).reduce(math.max);
+    final columns = maxX - minX + 1;
+    final rows = maxY - minY + 1;
+    final cellSize = math.min(size.width / columns, size.height / rows);
+    final origin = Offset(
+      (size.width - columns * cellSize) / 2,
+      (size.height - rows * cellSize) / 2,
+    );
+    for (final cell in cells) {
+      final rect = Rect.fromLTWH(
+        origin.dx + (cell.x - minX) * cellSize,
+        origin.dy + (cell.y - minY) * cellSize,
+        cellSize,
+        cellSize,
+      ).deflate(1);
+      canvas.drawRect(rect, Paint()..color = _ink);
+      canvas.drawRect(
+        rect.deflate(math.max(1, cellSize * .18)),
+        Paint()..color = const Color(0xFFB5C49D),
+      );
+      canvas.drawRect(
+        rect.deflate(math.max(2, cellSize * .33)),
+        Paint()..color = _ink,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PiecePreviewPainter oldDelegate) =>
+      oldDelegate.type != type;
 }
 
 class _ConsoleButton extends StatefulWidget {
