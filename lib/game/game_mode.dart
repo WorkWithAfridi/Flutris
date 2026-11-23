@@ -96,6 +96,7 @@ const Map<GameMode, ModeConfig> modeConfigs = <GameMode, ModeConfig>{
     linesPerLevel: 10,
     goalType: GoalType.lines,
     goalValue: 150,
+    allowHints: true,
     comboScoring: true,
   ),
   GameMode.sprint: ModeConfig(
@@ -108,6 +109,7 @@ const Map<GameMode, ModeConfig> modeConfigs = <GameMode, ModeConfig>{
     linesPerLevel: 10,
     goalType: GoalType.lines,
     goalValue: 40,
+    allowHints: true,
     scoreMultiplier: 0.5,
   ),
   GameMode.ultra: ModeConfig(
@@ -120,6 +122,7 @@ const Map<GameMode, ModeConfig> modeConfigs = <GameMode, ModeConfig>{
     linesPerLevel: 10,
     goalType: GoalType.time,
     timeLimit: Duration(minutes: 2),
+    allowHints: true,
     scoreMultiplier: 1.5,
     comboScoring: true,
   ),
@@ -136,6 +139,7 @@ const Map<GameMode, ModeConfig> modeConfigs = <GameMode, ModeConfig>{
     instantGravity: true,
     startingLockDelayMillis: 500,
     minimumLockDelayMillis: 80,
+    allowHints: true,
     scoreMultiplier: 2.0,
     comboScoring: true,
   ),

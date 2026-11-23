@@ -7,15 +7,15 @@ import '../tetris.dart';
 
 /// Flame-rendered start menu, HUD, hint panel and end screens.
 ///
-/// It lives inside the game canvas (the handheld LCD slot), so the Flutter UI
-/// does not need to change: the existing buttons forward input to the game and
-/// this component reflects the resulting state.
+/// It lives inside the game canvas and can use a compact menu when a Flutter
+/// shell presents selected-mode details in a separate panel.
 class FlowOverlayComponent extends PositionComponent {
   FlowOverlayComponent({
     required this.flow,
     required this.palette,
     required this.engine,
     this.renderHud = true,
+    this.compactMenu = false,
     this.advisor = const PlacementAdvisor(),
     super.priority,
   });
@@ -26,7 +26,11 @@ class FlowOverlayComponent extends PositionComponent {
   /// Mutable: replaced when a different mode is started.
   TetrisEngine engine;
   final bool renderHud;
+  final bool compactMenu;
   final PlacementAdvisor advisor;
+
+  /// Notifies the UI when the computed hint changes.
+  void Function(Placement? hint)? onHintChanged;
 
   /// Whether the planning hint panel is visible.
   bool showHint = false;
@@ -61,11 +65,7 @@ class FlowOverlayComponent extends PositionComponent {
       ),
     );
     _small = TextPaint(
-      style: TextStyle(
-        fontFamily: font,
-        fontSize: 7,
-        color: Color(0xFF354839),
-      ),
+      style: TextStyle(fontFamily: font, fontSize: 7, color: Color(0xFF354839)),
     );
     _accent = TextPaint(
       style: TextStyle(
@@ -100,6 +100,7 @@ class FlowOverlayComponent extends PositionComponent {
     if (_hintRefresh < 0.25) return;
     _hintRefresh = 0;
     hint = advisor.suggest(engine);
+    onHintChanged?.call(hint);
   }
 
   @override
@@ -110,7 +111,8 @@ class FlowOverlayComponent extends PositionComponent {
     }
 
     if (renderHud) _renderHud(canvas);
-    if (showHint) _renderHint(canvas);
+    // With renderHud == false the host Flutter UI renders the hint instead.
+    if (showHint && renderHud) _renderHint(canvas);
     if (flow.isPaused || flow.isEndScreen) _renderEndOverlay(canvas);
   }
 
@@ -120,12 +122,15 @@ class FlowOverlayComponent extends PositionComponent {
 
   void _renderMenu(Canvas canvas) {
     final w = size.x;
-    canvas.drawRect(Offset.zero & size.toSize(), Paint()..color = palette.field);
+    canvas.drawRect(
+      Offset.zero & size.toSize(),
+      Paint()..color = palette.field,
+    );
 
-    _text(canvas, 'FLUTRIS', 10, 10, _title);
-    _text(canvas, 'SELECT MODE', 10, 30, _small);
+    _text(canvas, compactMenu ? 'SELECT MODE' : 'FLUTRIS', 10, 10, _title);
+    if (!compactMenu) _text(canvas, 'SELECT MODE', 10, 30, _small);
 
-    var y = 48.0;
+    var y = compactMenu ? 34.0 : 48.0;
     for (var i = 0; i < flow.modes.length; i++) {
       final mode = flow.modes[i];
       final selected = i == flow.selected;
@@ -137,13 +142,7 @@ class FlowOverlayComponent extends PositionComponent {
       }
       final best = flow.bestScores[mode.mode];
       final name = selected ? '>${mode.name}' : ' ${mode.name}';
-      _text(
-        canvas,
-        name,
-        9,
-        y,
-        selected ? _inverse : _accent,
-      );
+      _text(canvas, name, 9, y, selected ? _inverse : _accent);
       _text(
         canvas,
         '${mode.goalLabel.padRight(9)} BEST ${best ?? 0}',
@@ -153,6 +152,8 @@ class FlowOverlayComponent extends PositionComponent {
       );
       y += 26;
     }
+
+    if (compactMenu) return;
 
     final mode = flow.selectedMode;
     _text(canvas, mode.tagline, 8, y + 4, _accent);
@@ -167,13 +168,21 @@ class FlowOverlayComponent extends PositionComponent {
 
     _text(canvas, engine.mode.name, 5, 3, _accent);
     _text(canvas, 'LV ${engine.level}', 5, 13, _small);
-    _text(canvas, '${engine.lines}/${engine.mode.goalValue ?? '--'}', w / 2 - 12, 13, _small);
+    _text(
+      canvas,
+      '${engine.lines}/${engine.mode.goalValue ?? '--'}',
+      w / 2 - 12,
+      13,
+      _small,
+    );
 
     final time = engine.mode.timeLimit == null
         ? _formatDuration(engine.elapsed)
         : _formatDuration(engine.remainingTime);
     _text(canvas, time, w - 40, 3, _small);
-    if (engine.combo > 1) _text(canvas, 'x${engine.combo} COMBO', w - 55, 13, _small);
+    if (engine.combo > 1) {
+      _text(canvas, 'x${engine.combo} COMBO', w - 55, 13, _small);
+    }
   }
 
   void _renderHint(Canvas canvas) {
@@ -219,8 +228,20 @@ class FlowOverlayComponent extends PositionComponent {
     };
     _text(canvas, title, 10, h / 2 - 60, _inverse);
     _text(canvas, 'SCORE ${engine.score}', 10, h / 2 - 34, _body);
-    _text(canvas, 'LINES ${engine.lines}  LEVEL ${engine.level}', 10, h / 2 - 18, _body);
-    _text(canvas, 'TIME ${_formatDuration(engine.elapsed)}', 10, h / 2 - 2, _body);
+    _text(
+      canvas,
+      'LINES ${engine.lines}  LEVEL ${engine.level}',
+      10,
+      h / 2 - 18,
+      _body,
+    );
+    _text(
+      canvas,
+      'TIME ${_formatDuration(engine.elapsed)}',
+      10,
+      h / 2 - 2,
+      _body,
+    );
     _text(canvas, 'A / ENTER = MENU', 10, h / 2 + 30, _body);
   }
 
@@ -238,7 +259,8 @@ class FlowOverlayComponent extends PositionComponent {
     var lineY = y;
     for (final word in words) {
       final candidate = buffer.isEmpty ? word : '$buffer $word';
-      if (paint.toTextPainter(candidate).width > maxWidth && buffer.isNotEmpty) {
+      if (paint.toTextPainter(candidate).width > maxWidth &&
+          buffer.isNotEmpty) {
         _text(canvas, buffer.toString(), x, lineY, paint);
         buffer
           ..clear()

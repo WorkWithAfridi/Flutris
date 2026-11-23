@@ -56,6 +56,17 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
 
   bool get isHintVisible => isLoaded && _overlay.showHint;
 
+  /// Latest placement suggestion, rendered by the Flutter side panel.
+  Placement? get placementHint => isLoaded ? _overlay.hint : null;
+
+  /// Compact signature used to avoid unnecessary UI rebuilds.
+  String get hintSummary {
+    final hint = placementHint;
+    if (hint == null) return '';
+    return '${hint.rotation}/${hint.x}/${hint.features.lines}/'
+        '${hint.features.holes}/${hint.score.toStringAsFixed(1)}';
+  }
+
   late final GameFlow flow;
   late final BoardComponent _board;
   late final FlowOverlayComponent _overlay;
@@ -88,6 +99,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     await add(_overlay);
     // Fire-and-forget: audio setup must never block the game from loading.
     FeedbackService.instance.preload();
+    _overlay.onHintChanged = (_) => onStateChanged?.call();
     _wireEngine(_engine);
 
     if (startInMenu) {
@@ -241,9 +253,10 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
       hold();
     } else if (key == LogicalKeyboardKey.keyH) {
       toggleHint();
-    } else if (key == LogicalKeyboardKey.keyP ||
-        key == LogicalKeyboardKey.escape) {
+    } else if (key == LogicalKeyboardKey.keyP) {
       togglePause();
+    } else if (key == LogicalKeyboardKey.escape) {
+      quitToMenu();
     } else if (key == LogicalKeyboardKey.keyM) {
       FeedbackService.instance.toggleSound();
       FeedbackService.instance.press();
@@ -296,10 +309,18 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     onStateChanged?.call();
   }
 
-  void back() {
+  /// Leaves the current game and returns to the mode menu, keeping records.
+  void quitToMenu() {
+    if (flow.isMenu) return;
+    flow.recordBest(_engine);
+    _overlay.showHint = false;
+    _overlay.hint = null;
+    _engine.reset();
     flow.toMenu();
     onStateChanged?.call();
   }
+
+  void back() => quitToMenu();
 
   void toggleHint() {
     if (!isLoaded || !_engine.mode.allowHints) return;

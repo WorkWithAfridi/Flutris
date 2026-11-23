@@ -67,4 +67,40 @@ void main() {
     expect(game.engine.mode.allowHold, isTrue);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('quitToMenu resets the engine and returns to the menu',
+      (tester) async {
+    final game = FlutrisGame();
+    await tester.pumpWidget(GameWidget<FlutrisGame>(game: game));
+    await tester.runAsync(() => game.loaded);
+    await tester.pump();
+
+    game.confirm();
+    game.hardDrop();
+    expect(game.engine.score, greaterThan(0));
+
+    game.quitToMenu();
+    expect(game.flow.isMenu, isTrue);
+    expect(game.engine.status, TetrisStatus.ready);
+    expect(game.engine.score, 0);
+    expect(game.engine.activePiece, isNull);
+  });
+
+  testWidgets('hint is computed and exposed for the side panel', (tester) async {
+    final game = FlutrisGame();
+    await tester.pumpWidget(GameWidget<FlutrisGame>(game: game));
+    await tester.runAsync(() => game.loaded);
+    await tester.pump();
+
+    for (var i = 0; i < 5; i++) {
+      game.menuDown();
+    }
+    game.confirm();
+    game.toggleHint();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(game.isHintVisible, isTrue);
+    expect(game.placementHint, isNotNull);
+    expect(game.hintSummary, isNotEmpty);
+  });
 }
