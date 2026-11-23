@@ -14,12 +14,14 @@ per-mode high scores saved on the device.
   &nbsp;·&nbsp; Version 1.0.0
 </p>
 
-## Screenshots
+## iOS simulator screenshots
+
+Captured from the iPhone 18 Pro simulator running iOS 27.2.
 
 <p align="center">
-  <img src="screenshots/mode-selection.png" alt="Flutris mode selection screen" width="39%">
+  <img src="screenshots/ios-mode-selection.png" alt="Flutris mode selection on iPhone simulator" width="39%">
   &nbsp;&nbsp;
-  <img src="screenshots/gameplay.png" alt="Flutris gameplay screen with score, next piece, and playfield" width="40%">
+  <img src="screenshots/ios-gameplay.png" alt="Flutris gameplay on iPhone simulator, showing score, next piece, and playfield" width="40%">
 </p>
 
 ## Features
@@ -32,7 +34,7 @@ per-mode high scores saved on the device.
 - Placement hints from a one-piece board evaluator.
 - Touch controls in the handheld shell and keyboard controls for desktop and
   simulator play.
-- Menu and gameplay music, pooled sound effects, and best-effort haptics.
+- Menu background music, pooled sound effects, and best-effort haptics.
 - Per-mode best scores stored locally with `shared_preferences`.
 - Edge-to-edge, responsive layout and an animated Flame boot splash.
 
@@ -155,10 +157,10 @@ available in [`lib/game/ENGINE.md`](lib/game/ENGINE.md).
 ## Audio and haptics
 
 Flutris uses [`flame_audio`](https://pub.dev/packages/flame_audio) for cached
-audio assets, pooled sound effects, and looping background tracks. One shared
+audio assets, pooled sound effects, and the menu background track. One shared
 `FeedbackService` serves both Flutter controls and game events. The menu track
-plays in mode select; the quieter gameplay track plays during a run. The
-keyboard **M** key toggles sound and music.
+plays in mode select and stops while a game is active. The keyboard **M** key
+toggles sound effects and menu music.
 
 Sound effects are declared in `lib/feedback/feedback_cue.dart` and mapped from
 engine events. They cover menu taps and navigation, movement, rotation, drops,
