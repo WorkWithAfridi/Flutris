@@ -308,7 +308,10 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     flow.sync(_engine);
   }
 
-  void restart() => _engine.start();
+  void restart() {
+    FeedbackService.instance.setScreen(FeedbackScreen.game);
+    _engine.start();
+  }
 
   // Menu navigation (forward D-pad / A / B while flow.isMenu).
   void menuUp() {

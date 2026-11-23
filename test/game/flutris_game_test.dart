@@ -103,4 +103,28 @@ void main() {
     expect(game.placementHint, isNotNull);
     expect(game.hintSummary, isNotEmpty);
   });
+
+  testWidgets('restart from an end screen starts a fresh game', (tester) async {
+    final game = FlutrisGame();
+    await tester.pumpWidget(GameWidget<FlutrisGame>(game: game));
+    await tester.runAsync(() => game.loaded);
+    await tester.pump();
+    game.confirm();
+
+    final board = List.generate(
+      TetrisEngine.rows,
+      (_) => List<PieceType?>.filled(TetrisEngine.columns, null),
+    );
+    board[0][3] = PieceType.j;
+    board[0][4] = PieceType.j;
+    board[0][5] = PieceType.j;
+    game.engine.loadBoard(board);
+    game.engine.hardDrop();
+    expect(game.flow.state, FlowState.gameOver);
+
+    game.restart();
+    expect(game.flow.isPlaying, isTrue);
+    expect(game.engine.status, TetrisStatus.playing);
+    expect(game.engine.score, 0);
+  });
 }

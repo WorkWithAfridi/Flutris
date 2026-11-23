@@ -233,7 +233,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
   String get _pauseControlLabel => switch (_game.flow.state) {
     FlowState.menu => 'START',
     FlowState.paused => 'RESUME',
-    FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'MENU',
+    FlowState.gameOver || FlowState.victory || FlowState.timeUp => 'RESTART',
     FlowState.playing => 'PAUSE',
   };
 
@@ -242,7 +242,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
     FlowState.paused => 'Resume game',
     FlowState.gameOver ||
     FlowState.victory ||
-    FlowState.timeUp => 'Return to menu',
+    FlowState.timeUp => 'Restart game',
     FlowState.playing => 'Pause game',
   };
 
@@ -251,7 +251,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
     FlowState.paused || FlowState.playing => _game.togglePause,
     FlowState.gameOver ||
     FlowState.victory ||
-    FlowState.timeUp => _game.confirm,
+    FlowState.timeUp => _game.restart,
   };
 
   Widget _display() => SizedBox.expand(
@@ -555,10 +555,13 @@ class _HandheldScreenState extends State<HandheldScreen> {
   String get _aCaption => _game.flow.isMenu
       ? 'START'
       : _game.flow.isEndScreen
-      ? 'MENU'
+      ? 'RESTART'
       : 'ROTATE';
-  String get _aSemantics =>
-      _game.flow.isMenu || _game.flow.isEndScreen ? 'Confirm' : 'Rotate piece';
+  String get _aSemantics => _game.flow.isMenu
+      ? 'Confirm'
+      : _game.flow.isEndScreen
+      ? 'Restart game'
+      : 'Rotate piece';
   String get _bCaption => _game.flow.isMenu
       ? 'NEXT'
       : _game.flow.isEndScreen
@@ -588,8 +591,10 @@ class _HandheldScreenState extends State<HandheldScreen> {
   VoidCallback get _rightAction =>
       _game.flow.isMenu ? _game.menuDown : _game.moveRight;
 
-  VoidCallback get _aAction => _game.flow.isMenu || _game.flow.isEndScreen
+  VoidCallback get _aAction => _game.flow.isMenu
       ? _game.confirm
+      : _game.flow.isEndScreen
+      ? _game.restart
       : _game.rotate;
 
   VoidCallback get _bAction => _game.flow.isMenu
