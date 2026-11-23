@@ -192,9 +192,8 @@ class _HandheldScreenState extends State<HandheldScreen> {
   };
 
   Widget _smallControls(double scale) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      SizedBox(width: 20 * scale),
       _smallControl(
         !_hintsAvailable
             ? 'NO HINT'
@@ -227,17 +226,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
         'Quit to menu',
         _game.quitToMenu,
         scale,
-        width: 34,
       ),
-      const Spacer(),
-      Padding(
-        padding: EdgeInsets.only(top: 12 * scale),
-        child: CustomPaint(
-          size: Size(58 * scale, 38 * scale),
-          painter: const _SpeakerPainter(),
-        ),
-      ),
-      SizedBox(width: 2 * scale),
     ],
   );
 
@@ -789,7 +778,13 @@ class _HandheldScreenState extends State<HandheldScreen> {
         ),
       ),
       SizedBox(height: 8 * scale),
-      _Label(caption, size: 8 * scale, spacing: 1.7 * scale),
+      SizedBox(
+        width: 56 * scale,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _Label(caption, size: 8 * scale, spacing: 1.7 * scale),
+        ),
+      ),
     ],
   );
 
@@ -799,27 +794,36 @@ class _HandheldScreenState extends State<HandheldScreen> {
     VoidCallback onTap,
     double scale, {
     bool enabled = true,
-    double width = 44,
-  }) => Column(
-    children: [
-      Transform.rotate(
-        angle: -.15,
-        child: _ConsoleButton(
-          label: label,
-          width: width * scale,
-          height: 15 * scale,
-          radius: BorderRadius.circular(10 * scale),
-          hitPadding: EdgeInsets.symmetric(
-            horizontal: (math.min(44, 56 * scale - 2) - 44 * scale) / 2,
-            vertical: (math.max(36, 15 * scale) - 15 * scale) / 2,
+  }) => SizedBox(
+    width: 58 * scale,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Transform.rotate(
+          angle: -.15,
+          child: _ConsoleButton(
+            label: label,
+            width: 44 * scale,
+            height: 15 * scale,
+            radius: BorderRadius.circular(10 * scale),
+            hitPadding: EdgeInsets.symmetric(
+              horizontal: (math.min(44, 56 * scale - 2) - 44 * scale) / 2,
+              vertical: (math.max(36, 15 * scale) - 15 * scale) / 2,
+            ),
+            onTap: enabled ? onTap : null,
+            child: const SizedBox(),
           ),
-          onTap: enabled ? onTap : null,
-          child: const SizedBox(),
         ),
-      ),
-      SizedBox(height: 10 * scale),
-      _Label(text, size: 7 * scale, spacing: 1 * scale),
-    ],
+        SizedBox(height: 10 * scale),
+        SizedBox(
+          width: 58 * scale,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: _Label(text, size: 7 * scale, spacing: 1 * scale),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -1048,28 +1052,4 @@ class _GlassSheenPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GlassSheenPainter oldDelegate) => false;
-}
-
-class _SpeakerPainter extends CustomPainter {
-  const _SpeakerPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.scale(size.width / 75);
-    canvas.rotate(-math.pi / 9);
-    for (var row = 0; row < 5; row++) {
-      for (var col = 0; col < 8; col++) {
-        canvas.drawCircle(
-          Offset(col * 8.0 - 28, row * 8.0 - 16),
-          1.8,
-          Paint()..color = const Color(0xFF77608F),
-        );
-      }
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_SpeakerPainter oldDelegate) => false;
 }
