@@ -1,9 +1,56 @@
 # Flutris
 
-A Flutter + Flame Tetris game with a handheld console UI, six game modes and
-an animated splash screen.
+<p align="center">
+  <img src="assets/branding/flutris-readme-cover.png" alt="Flutris handheld game cover with mode selection and gameplay screens" width="100%">
+</p>
 
-## Getting started
+Flutris is a handheld-inspired falling-block puzzle game built with Flutter and
+Flame. It combines a live LCD-style board with touch controls, six game modes,
+sound effects and haptic feedback.
+
+## In-app screenshots
+
+<p align="center">
+  <img src="screenshots/mode-selection.png" alt="Flutris mode selection screen" width="39%">
+  &nbsp;&nbsp;
+  <img src="screenshots/gameplay.png" alt="Flutris gameplay screen with score and next-piece preview" width="40%">
+</p>
+
+## Game modes
+
+| Mode | Goal | Style |
+| --- | --- | --- |
+| Marathon | Clear 150 lines | Classic progression across 15 levels |
+| Sprint 40 | Clear 40 lines | Race the clock at a fixed level |
+| Ultra 2:00 | Score attack | Set a high score in two minutes |
+| Master | Clear 300 lines | 20G gravity with a shrinking lock delay |
+| Zen | Endless | Relaxed gravity; top-outs reset the board |
+| Tactics | Clear 100 lines | Hints, combos and a deeper next-piece queue |
+
+The engine includes SRS wall kicks, ghost pieces, a seven-bag randomizer,
+soft and hard drop scoring, line clears, combos, best scores, hold and
+placement hints.
+
+## Controls
+
+| Action | Touch | Keyboard |
+| --- | --- | --- |
+| Move | D-pad left/right | ←/→ or A/D |
+| Soft drop | D-pad down | ↓ |
+| Hard drop | D-pad up or B | ↑ or X |
+| Rotate clockwise | A | Space or Z |
+| Rotate counter-clockwise | — | Q |
+| Hold piece | HOLD | C or Shift |
+| Hint | HINT | H |
+| Pause/resume | PAUSE | P |
+| Return to mode menu | MENU | Esc |
+| Restart | — | R |
+| Toggle sound | — | M |
+
+In the mode menu, use the D-pad to choose a mode and A to start it. B moves to
+the next mode.
+
+## Run locally
 
 ```sh
 flutter pub get
@@ -12,27 +59,14 @@ flutter run
 
 To choose a device, run `flutter devices`, then `flutter run -d <device-id>`.
 
-## Features
-
-- Six modes: Marathon (150 lines), Sprint 40, Ultra 2:00, Master (20G),
-  Zen (endless, no top-out loss) and Tactics (hints, hold, combos).
-- SRS rotation with wall kicks, ghost piece, lock delay, 7-bag randomizer,
-  combos, back-to-back bonuses and perfect clears.
-- Animated Flame splash with tap-to-skip, followed by a responsive handheld
-  shell with a dot-matrix LCD, D-pad, A/B buttons and haptics.
-- Planning hints powered by a one-piece placement advisor (El-Tetris heuristics).
-- Keyboard controls for desktop/web; on-screen buttons forward to the same API.
-
 ## Project structure
 
-- `lib/main.dart`: Flutter entry point; shows the splash then the handheld UI.
-- `lib/game/splash/flame_splash.dart`: animated Flame splash game.
-- `lib/ui/splash_screen.dart`: splash → UI cross-fade wrapper.
-- `lib/ui/handheld_screen.dart`: responsive console shell and controls.
-- `lib/game/flutris_game.dart`: Flame game hosting the engine and menu.
-- `lib/game/components/`: board renderer, flow overlay and line-clear effects.
-- `lib/game/`: pure-Dart rules engine, modes, levels, advisor and flow.
-- `ENGINE.md`: full engine reference. `lib/game/ENGINE.md`: UI wiring notes.
+- `lib/ui/handheld_screen.dart` — responsive console shell, HUD and touch UI.
+- `lib/game/flutris_game.dart` — Flame update loop, controls and game flow.
+- `lib/game/tetris_engine.dart` — pure-Dart rules, board state and scoring.
+- `lib/game/components/` — board, HUD/menu overlay and line-clear effects.
+- `lib/feedback/` — shared sound and haptic feedback.
+- `ENGINE.md` — engine rules and public API.
 
 ## Checks
 

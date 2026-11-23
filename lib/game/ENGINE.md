@@ -38,9 +38,10 @@ or menus — forward input to the game and read its state.
 
 ## Wiring the handheld buttons
 
-The start menu is rendered **inside the Flame canvas**, so `GameWidget` needs
-no extra UI. `GameWidget.controlled` does not expose the game instance; hold
-one in the widget's `State` and use the regular constructor:
+The start menu and board are rendered **inside the Flame canvas**. A Flutter
+shell can render its own HUD beside the board. `GameWidget.controlled` does not
+expose the game instance; hold one in the widget's `State` and use the regular
+constructor:
 
 ```dart
 late final FlutrisGame game;
@@ -48,8 +49,8 @@ late final FlutrisGame game;
 @override
 void initState() {
   super.initState();
-  game = FlutrisGame();
-  game.engine.onChanged = () => setState(() {}); // refresh external HUD if needed
+  game = FlutrisGame(renderHud: false, compactMenu: true);
+  game.onStateChanged = () => setState(() {}); // refresh a Flutter HUD
 }
 
 @override
