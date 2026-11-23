@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../feedback/feedback_service.dart';
 import '../game/flutris_game.dart';
 import '../game/tetris.dart';
+import 'privacy_policy_overlay.dart';
 
 const _ink = Color(0xFF302449);
 
@@ -19,6 +20,7 @@ class HandheldScreen extends StatefulWidget {
 
 class _HandheldScreenState extends State<HandheldScreen> {
   late final FlutrisGame _game;
+  bool _showPrivacyPolicy = false;
 
   @override
   void initState() {
@@ -142,6 +144,12 @@ class _HandheldScreenState extends State<HandheldScreen> {
                   ],
                 ),
               ),
+              if (_showPrivacyPolicy)
+                Positioned.fill(
+                  child: PrivacyPolicyOverlay(
+                    onClose: () => setState(() => _showPrivacyPolicy = false),
+                  ),
+                ),
             ],
           ),
         );
@@ -162,6 +170,34 @@ class _HandheldScreenState extends State<HandheldScreen> {
         ),
       ),
       const Spacer(),
+      Semantics(
+        button: true,
+        label: 'Privacy policy',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _showPrivacyPolicy = true),
+          child: Container(
+            width: 18,
+            height: 18,
+            margin: const EdgeInsets.only(right: 9),
+            decoration: BoxDecoration(
+              color: _ink.withValues(alpha: .08),
+              shape: BoxShape.circle,
+              border: Border.all(color: _ink.withValues(alpha: .25)),
+            ),
+            child: const Center(
+              child: Text(
+                'i',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
       Container(
         width: 7,
         height: 7,
