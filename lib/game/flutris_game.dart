@@ -108,7 +108,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     await add(_overlay);
     // Fire-and-forget: audio setup must never block the game from loading.
     FeedbackService.instance.preload().then(
-      (_) => FeedbackService.instance.syncMenuMusic(inMenu: flow.isMenu),
+      (_) => FeedbackService.instance.setScreen(
+        flow.isMenu ? FeedbackScreen.menu : FeedbackScreen.game,
+      ),
     );
     _overlay.onHintChanged = (_) => onStateChanged?.call();
     _wireEngine(_engine);
@@ -145,7 +147,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
   }
 
   void _startMode(ModeConfig mode) {
-    FeedbackService.instance.stopMenuMusic();
+    FeedbackService.instance.setScreen(FeedbackScreen.game);
     _engine = TetrisEngine(mode: mode, best: flow.bestScores[mode.mode]);
     _board.engine = _engine;
     _overlay.engine = _engine;
@@ -271,7 +273,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
       quitToMenu();
     } else if (key == LogicalKeyboardKey.keyM) {
       FeedbackService.instance.toggleSound();
-      FeedbackService.instance.syncMenuMusic(inMenu: flow.isMenu);
+      FeedbackService.instance.setScreen(
+        flow.isMenu ? FeedbackScreen.menu : FeedbackScreen.game,
+      );
       FeedbackService.instance.press();
     } else if (key == LogicalKeyboardKey.keyR) {
       restart();
@@ -330,7 +334,7 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     _overlay.hint = null;
     _engine.reset();
     flow.toMenu();
-    FeedbackService.instance.syncMenuMusic(inMenu: true);
+    FeedbackService.instance.setScreen(FeedbackScreen.menu);
     onStateChanged?.call();
   }
 

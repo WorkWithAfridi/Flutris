@@ -3,6 +3,9 @@ import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'feedback_cue.dart';
 
+/// Which screen's background track should be playing.
+enum FeedbackScreen { none, menu, game }
+
 /// Shared haptic + sound feedback for the UI buttons and the game engine.
 ///
 /// One instance serves both worlds so a single sound toggle controls
@@ -15,6 +18,7 @@ class FeedbackService {
   static final FeedbackService instance = FeedbackService._();
 
   static const String menuBgmAsset = 'menu_bgm.wav';
+  static const String gameBgmAsset = 'game_bgm.wav';
 
   bool soundEnabled = true;
   bool hapticsEnabled = true;
@@ -29,7 +33,8 @@ class FeedbackService {
   final Map<FeedbackCue, DateTime> _lastPlayed = <FeedbackCue, DateTime>{};
   final Map<String, AudioPool> _pools = <String, AudioPool>{};
   Future<void>? _preloadFuture;
-  bool _menuMusicPlaying = false;
+  FeedbackScreen screen = FeedbackScreen.none;
+  String? _currentTrack;
 
   /// Loads and pools all effects. Idempotent and never blocks the caller's
   /// game load: failures leave feedback silently disabled.
@@ -40,6 +45,7 @@ class FeedbackService {
       await FlameAudio.audioCache.loadAll([
         ...FeedbackCue.allAssets,
         menuBgmAsset,
+        gameBgmAsset,
       ]);
       for (final asset in FeedbackCue.allAssets) {
         try {
@@ -53,41 +59,60 @@ class FeedbackService {
         }
       }
       audioReady = _pools.isNotEmpty;
+      _syncMusic();
     } catch (_) {
       audioReady = false;
     }
   }
 
 
-  /// Loops the retro menu track. Best-effort and safe to call repeatedly.
-  Future<void> startMenuMusic() async {
-    if (!soundEnabled || !audioReady || _menuMusicPlaying) return;
-    _menuMusicPlaying = true;
+  /// Selects which background track should play.
+  void setScreen(FeedbackScreen value) {
+    screen = value;
+    _syncMusic();
+  }
+
+  Future<void> startMenuMusic() async => setScreen(FeedbackScreen.menu);
+
+  Future<void> startGameMusic() async => setScreen(FeedbackScreen.game);
+
+  Future<void> stopMenuMusic() async => setScreen(FeedbackScreen.none);
+
+  /// Backwards-compatible helper for callers that only know about the menu.
+  void syncMenuMusic({required bool inMenu}) =>
+      setScreen(inMenu ? FeedbackScreen.menu : FeedbackScreen.none);
+
+  void _syncMusic() {
+    if (!soundEnabled || !audioReady || screen == FeedbackScreen.none) {
+      _stopMusic();
+      return;
+    }
+    final track = screen == FeedbackScreen.menu ? menuBgmAsset : gameBgmAsset;
+    if (_currentTrack == track) return;
+    _switchTrack(track);
+  }
+
+  Future<void> _switchTrack(String track) async {
     try {
+      await FlameAudio.bgm.stop();
       await FlameAudio.bgm.initialize();
-      await FlameAudio.bgm.play(menuBgmAsset, volume: 0.28);
+      await FlameAudio.bgm.play(
+        track,
+        volume: track == gameBgmAsset ? 0.12 : 0.28,
+      );
+      _currentTrack = track;
     } catch (_) {
-      _menuMusicPlaying = false;
+      _currentTrack = null;
     }
   }
 
-  /// Stops the menu track when gameplay begins or sound is muted.
-  Future<void> stopMenuMusic() async {
-    if (!_menuMusicPlaying) return;
-    _menuMusicPlaying = false;
+  Future<void> _stopMusic() async {
+    if (_currentTrack == null) return;
+    _currentTrack = null;
     try {
       await FlameAudio.bgm.stop();
     } catch (_) {
       // Feedback is best-effort.
-    }
-  }
-
-  /// Keeps music in sync with the sound toggle and current screen.
-  void syncMenuMusic({required bool inMenu}) {
-    if (soundEnabled && audioReady && inMenu) {
-      startMenuMusic();
-    } else {
-      stopMenuMusic();
     }
   }
 
@@ -99,6 +124,7 @@ class FeedbackService {
 
   bool toggleSound() {
     soundEnabled = !soundEnabled;
+    _syncMusic();
     return soundEnabled;
   }
 
