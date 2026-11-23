@@ -36,6 +36,25 @@ class _HandheldScreenState extends State<HandheldScreen> {
 
   String _lastUiSignature = '';
   bool _refreshScheduled = false;
+  int? _pressedDpad;
+
+  /// D-pad taps are resolved as directions from the centre, so the entire
+  /// pad is tappable instead of four small separate squares.
+  ({int index, VoidCallback action})? _dpadTarget(Offset local, double size) {
+    final centre = size / 2;
+    final dx = local.dx - centre;
+    final dy = local.dy - centre;
+    final deadZone = size * .18;
+    if (dx.abs() < deadZone && dy.abs() < deadZone) return null;
+    if (dx.abs() > dy.abs()) {
+      return dx < 0
+          ? (index: 2, action: _leftAction)
+          : (index: 3, action: _rightAction);
+    }
+    return dy < 0
+        ? (index: 0, action: _upAction)
+        : (index: 1, action: _downAction);
+  }
 
   /// Only the values actually shown by this widget belong here. Engine events
   /// fire several times per second; rebuilding for every one of them is what
@@ -576,6 +595,21 @@ class _HandheldScreenState extends State<HandheldScreen> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) {
+                        final target = _dpadTarget(details.localPosition, dpadSize);
+                        if (target == null) return;
+                        setState(() => _pressedDpad = target.index);
+                        FeedbackService.instance.press();
+                        target.action();
+                      },
+                      onTapUp: (_) => setState(() => _pressedDpad = null),
+                      onTapCancel: () => setState(() => _pressedDpad = null),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
                   Container(
                     width: stemSize,
                     height: stemSize,
@@ -586,6 +620,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     left: stemPosition,
                     child: _direction(
                       _upSemantics,
+                      0,
                       '↑',
                       const BorderRadius.vertical(top: Radius.circular(6)),
                       scale,
@@ -597,6 +632,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     left: stemPosition,
                     child: _direction(
                       _downSemantics,
+                      1,
                       '↓',
                       const BorderRadius.vertical(bottom: Radius.circular(6)),
                       scale,
@@ -608,6 +644,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     top: stemPosition,
                     child: _direction(
                       _leftSemantics,
+                      2,
                       '←',
                       const BorderRadius.horizontal(left: Radius.circular(6)),
                       scale,
@@ -619,6 +656,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
                     top: stemPosition,
                     child: _direction(
                       _rightSemantics,
+                      3,
                       '→',
                       const BorderRadius.horizontal(right: Radius.circular(6)),
                       scale,
@@ -658,6 +696,7 @@ class _HandheldScreenState extends State<HandheldScreen> {
 
   Widget _direction(
     String label,
+    int index,
     String glyph,
     BorderRadius radius,
     double scale,
@@ -667,7 +706,8 @@ class _HandheldScreenState extends State<HandheldScreen> {
     width: 41 * scale,
     height: 41 * scale,
     radius: radius,
-    onTap: onTap,
+    semanticTap: onTap,
+    pressedOverride: _pressedDpad == index,
     child: Text(
       glyph,
       style: TextStyle(fontSize: 23 * scale, color: const Color(0xFF96909E)),
@@ -696,6 +736,11 @@ class _HandheldScreenState extends State<HandheldScreen> {
           height: 52 * scale,
           radius: BorderRadius.circular(30 * scale),
           color: const Color(0xFF655078),
+          hitPadding: EdgeInsets.all(
+            (math.max(52 * scale, math.min(48, 153 * scale / 2 - 2)) -
+                    52 * scale) /
+                2,
+          ),
           onTap: onTap,
           child: Text(
             letter,
@@ -727,6 +772,10 @@ class _HandheldScreenState extends State<HandheldScreen> {
           width: 44 * scale,
           height: 15 * scale,
           radius: BorderRadius.circular(10 * scale),
+          hitPadding: EdgeInsets.symmetric(
+            horizontal: (math.min(44, 56 * scale - 2) - 44 * scale) / 2,
+            vertical: (math.max(36, 15 * scale) - 15 * scale) / 2,
+          ),
           onTap: enabled ? onTap : null,
           child: const SizedBox(),
         ),
@@ -804,6 +853,9 @@ class _ConsoleButton extends StatefulWidget {
     required this.radius,
     required this.child,
     this.onTap,
+    this.semanticTap,
+    this.pressedOverride,
+    this.hitPadding = EdgeInsets.zero,
     this.color = const Color(0xFF35313F),
   });
   final String label;
@@ -812,6 +864,9 @@ class _ConsoleButton extends StatefulWidget {
   final BorderRadius radius;
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? semanticTap;
+  final bool? pressedOverride;
+  final EdgeInsets hitPadding;
   final Color color;
 
   @override
@@ -828,50 +883,74 @@ class _ConsoleButtonState extends State<_ConsoleButton> {
     onTap();
   }
 
+  bool get _isPressed => widget.pressedOverride ?? _pressed;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    enabled: widget.onTap != null,
-    label: widget.label,
-    onTap: widget.onTap == null ? null : _activate,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: widget.onTap == null
-          ? null
-          : (_) => setState(() => _pressed = true),
-      onTapUp: widget.onTap == null
-          ? null
-          : (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onTap == null ? null : _activate,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 65),
-        transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          borderRadius: widget.radius,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              widget.color,
-              Color.lerp(widget.color, const Color(0xFF000000), .25)!,
-            ],
-          ),
-          border: Border.all(color: const Color(0xFF26222F), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF69567F),
-              offset: Offset(0, _pressed ? 1 : 4),
-              blurRadius: _pressed ? 1 : 2,
-            ),
+  Widget build(BuildContext context) {
+    final pressed = _isPressed;
+    final visual = AnimatedContainer(
+      duration: const Duration(milliseconds: 65),
+      transform: Matrix4.translationValues(0, pressed ? 2 : 0, 0),
+      width: widget.width,
+      height: widget.height,
+      decoration: BoxDecoration(
+        borderRadius: widget.radius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            widget.color,
+            Color.lerp(widget.color, const Color(0xFF000000), .25)!,
           ],
         ),
-        child: Center(child: widget.child),
+        border: Border.all(color: const Color(0xFF26222F), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF69567F),
+            offset: Offset(0, pressed ? 1 : 4),
+            blurRadius: pressed ? 1 : 2,
+          ),
+        ],
       ),
-    ),
-  );
+      child: Center(child: widget.child),
+    );
+
+    return Semantics(
+      button: true,
+      enabled: widget.onTap != null || widget.semanticTap != null,
+      label: widget.label,
+      onTap: widget.semanticTap ?? (widget.onTap == null ? null : _activate),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          // Invisible, enlarged hit area. The visual size (and therefore the
+          // layout) never changes; only the touch target grows.
+          if (widget.onTap != null)
+            Positioned(
+              left: -widget.hitPadding.left,
+              top: -widget.hitPadding.top,
+              right: -widget.hitPadding.right,
+              bottom: -widget.hitPadding.bottom,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => _setPressed(true),
+                onTapUp: (_) => _setPressed(false),
+                onTapCancel: () => _setPressed(false),
+                onTap: _activate,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          IgnorePointer(child: visual),
+        ],
+      ),
+    );
+  }
 }
 
 class _Label extends StatelessWidget {
