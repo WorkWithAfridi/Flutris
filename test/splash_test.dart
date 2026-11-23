@@ -49,13 +49,15 @@ void main() {
     expect(game.size.y, greaterThan(0));
 
     final canvas = game.size;
-    final scale = canvas.x < canvas.y ? canvas.x / 288 : canvas.y / 288;
+    final scale = canvas.x / 300 < canvas.y / 340
+        ? canvas.x / 300
+        : canvas.y / 340;
     final scene = game.children
         .whereType<PositionComponent>()
-        .firstWhere((component) => component.size.x == 288);
+        .firstWhere((component) => component.size.x == 300);
     expect(scene.scale.x, closeTo(scale, 0.01));
-    expect(scene.position.x, closeTo((canvas.x - 288 * scale) / 2, 0.01));
-    expect(scene.position.y, closeTo((canvas.y - 288 * scale) / 2, 0.01));
+    expect(scene.position.x, closeTo((canvas.x - 300 * scale) / 2, 0.01));
+    expect(scene.position.y, closeTo((canvas.y - 340 * scale) / 2, 0.01));
     expect(tester.takeException(), isNull);
   });
 

@@ -1,22 +1,35 @@
 import 'dart:math' as math;
-import 'dart:ui' show Color, Paint, Rect;
+import 'dart:ui'
+    show Canvas, Color, Offset, PaintingStyle, Paint, Radius, Rect, RRect;
 
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/painting.dart'
-    show Alignment, FontWeight, LinearGradient, TextStyle;
+    show Alignment, FontStyle, FontWeight, LinearGradient, TextStyle;
 
-/// Virtual design size of the splash scene. The scene is scaled and centered
-/// inside whatever canvas the game is given.
-const double _virtualSize = 288;
+/// Virtual design size of the splash device. Scaled and centered on canvas.
+const double _virtualWidth = 300;
+const double _virtualHeight = 340;
 
-/// Animated Flame splash shown before the handheld UI.
-///
-/// Motion uses Flame's effect/controller system: staggered dot reveals, logo
-/// scale-in, an infinite scanline, a filling progress bar and boot text.
-/// [onFinished] fires once when [duration] elapses.
+/// Palette mirrored from `lib/ui/handheld_screen.dart` so the splash and the
+/// handheld shell read as the same object.
+abstract final class _ShellColors {
+  static const base = Color(0xFF382D46);
+  static const bezel = Color(0xFF302D3E);
+  static const bezelBorder = Color(0xFF493E53);
+  static const shadow = Color(0x40816A9B);
+  static const ink = Color(0xFF302449);
+  static const muted = Color(0xFFADA6BC);
+  static const lcd = Color(0xFFB5C49D);
+  static const lcdEdge = Color(0xFF171E20);
+  static const lcdInk = Color(0xFF354839);
+  static const led = Color(0xFF9ACD7E);
+}
+
+/// Splash that presents the handheld device booting up, using the same visual
+/// language as the in-game shell. Motion uses Flame effects/controllers.
 class FlameSplash extends FlameGame {
   FlameSplash({
     this.duration = const Duration(milliseconds: 2600),
@@ -26,23 +39,23 @@ class FlameSplash extends FlameGame {
   final Duration duration;
   final void Function()? onFinished;
 
+  _ShellBackdrop? _backdrop;
   _SplashScene? _scene;
   bool _completed = false;
 
-  /// Matches the handheld shell's dark purple surround.
   @override
-  Color backgroundColor() => const Color(0xFF382D46);
+  Color backgroundColor() => _ShellColors.base;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    _backdrop = _ShellBackdrop();
     _scene = _SplashScene(
       duration: duration,
       onFinished: _complete,
-      // The first resize may have happened before the scene existed, so the
-      // scene must lay itself out with the size we already have.
       initialSize: size.clone(),
     );
+    await add(_backdrop!);
     await add(_scene!);
     await add(
       TimerComponent(
@@ -56,7 +69,9 @@ class FlameSplash extends FlameGame {
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
-    _scene?.layoutScene(size.clone());
+    final canvas = size.clone();
+    _backdrop?.size = canvas;
+    _scene?.layoutScene(canvas);
   }
 
   void _complete() {
@@ -66,6 +81,49 @@ class FlameSplash extends FlameGame {
   }
 }
 
+/// The shell gradient and glass sheen, covering the whole viewport.
+class _ShellBackdrop extends PositionComponent {
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    // Components receive their first resize on mount, so this also covers the
+    // case where the game resized before onLoad created this component.
+    this.size = size.clone();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final rect = Offset.zero & size.toSize();
+    canvas.drawRect(rect, Paint()..color = _ShellColors.base);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xBFDCCAF0),
+            Color(0xA67F659E),
+            Color(0xB27A6196),
+          ],
+          stops: const [0, .48, 1],
+        ).createShader(rect),
+    );
+    // Subtle diagonal glass highlight like the shell's sheen painter.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment(0.4, 1),
+          colors: [Color(0x18FFFFFF), Color(0x00FFFFFF)],
+          stops: const [0, 0.55],
+        ).createShader(rect),
+    );
+  }
+}
+
+/// The scaled/centered device illustration and its boot animation.
 class _SplashScene extends PositionComponent {
   _SplashScene({
     required this.duration,
@@ -77,77 +135,78 @@ class _SplashScene extends PositionComponent {
   final void Function() onFinished;
   final Vector2 _initialSize;
 
-  static const _ink = Color(0xFF354839);
-
-  /// Centers and scales the fixed virtual frame inside [canvas].
   void layoutScene(Vector2 canvas) {
-    final scale = math.min(canvas.x / _virtualSize, canvas.y / _virtualSize);
+    final scale = math.min(
+      canvas.x / _virtualWidth,
+      canvas.y / _virtualHeight,
+    );
     this.scale = Vector2.all(scale);
     position = Vector2(
-      (canvas.x - _virtualSize * scale) / 2,
-      (canvas.y - _virtualSize * scale) / 2,
+      (canvas.x - _virtualWidth * scale) / 2,
+      (canvas.y - _virtualHeight * scale) / 2,
     );
   }
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    size = Vector2.all(_virtualSize);
+    size = Vector2(_virtualWidth, _virtualHeight);
     layoutScene(_initialSize);
 
-    // Deep purple edge gives the panel the same layered feel as the shell.
-    await add(
-      RectangleComponent(
-        position: Vector2(12, 12),
-        size: Vector2(264, 264),
-        paint: Paint()..color = const Color(0xFF6E5A86),
-      ),
-    );
-    await add(
-      RectangleComponent(
-        position: Vector2(16, 16),
-        size: Vector2(256, 256),
-        paint: Paint()
-          ..shader = const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFD1C2E9), Color(0xFF9980B8)],
-          ).createShader(Rect.fromLTWH(0, 0, 256, 256)),
-      ),
-    );
-
-    await _addDisplay();
-    await _addLogo();
-    await _addScanline();
-    await _addProgressBar();
-    await _addBootText();
+    await add(_Wordmark());
+    await add(_DeviceBezel());
+    await _addStatusRow();
+    await _addLcd();
+    await _addProgressAndBootText();
   }
 
-  Future<void> _addDisplay() async {
-    // LCD bezel and screen.
+  Future<void> _addStatusRow() async {
+    final led = CircleComponent(
+      position: Vector2(42, 74),
+      radius: 3.5,
+      anchor: Anchor.center,
+      paint: Paint()..color = _ShellColors.led,
+    );
+    await add(led);
+    led.add(
+      ScaleEffect.by(
+        Vector2.all(1.25),
+        EffectController(
+          duration: 0.5,
+          infinite: true,
+          alternate: true,
+          curve: Curves.easeInOut,
+        ),
+      ),
+    );
+    await add(_label('BOOTING', 52, 69, size: 6.5, spacing: 1.2));
+    await add(_label('DOT MATRIX DISPLAY', 250, 69, size: 5.5, spacing: .8, anchoredEnd: true));
+  }
+
+  Future<void> _addLcd() async {
+    // Hard dark edge, matching the 3px LCD border in the shell.
     await add(
       RectangleComponent(
-        position: Vector2(26, 46),
-        size: Vector2(236, 128),
-        paint: Paint()..color = const Color(0xFF2E2740),
+        position: Vector2(40, 86),
+        size: Vector2(220, 128),
+        paint: Paint()..color = _ShellColors.lcdEdge,
       ),
     );
     await add(
       RectangleComponent(
-        position: Vector2(30, 50),
-        size: Vector2(228, 120),
-        paint: Paint()..color = const Color(0xFFB5C49D),
+        position: Vector2(43, 89),
+        size: Vector2(214, 122),
+        paint: Paint()..color = _ShellColors.lcd,
       ),
     );
 
-    // Three rows of dots in the upper part of the LCD, well clear of the logo.
     for (var row = 0; row < 3; row++) {
       for (var col = 0; col < 14; col++) {
         final dot = RectangleComponent(
-          position: Vector2(44 + col * 15.3, 62 + row * 18),
+          position: Vector2(54 + col * 14.4, 100 + row * 16),
           size: Vector2(8, 8),
           anchor: Anchor.center,
-          paint: Paint()..color = _ink,
+          paint: Paint()..color = _ShellColors.lcdInk,
         );
         dot.scale = Vector2.all(0.01);
         await add(dot);
@@ -156,33 +215,32 @@ class _SplashScene extends PositionComponent {
             Vector2.all(1),
             EffectController(
               duration: 0.28,
-              startDelay: 0.04 + (row * 14 + col) * 0.012,
+              startDelay: 0.04 + (row * 14 + col) * 0.011,
               curve: Curves.easeOutBack,
             ),
           ),
         );
       }
     }
-  }
 
-  Future<void> _addLogo() async {
-    final logo = TextComponent(
-      text: 'FLUTRIS',
+    final wordmark = TextComponent(
+      text: 'flutris',
       textRenderer: TextPaint(
         style: TextStyle(
           fontFamily: 'monospace',
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-          color: _ink,
-          letterSpacing: 2,
+          fontSize: 26,
+          fontWeight: FontWeight.w900,
+          fontStyle: FontStyle.italic,
+          letterSpacing: -1.2,
+          color: _ShellColors.ink,
         ),
       ),
-      position: Vector2(_virtualSize / 2, 130),
+      position: Vector2(150, 159),
       anchor: Anchor.center,
     );
-    logo.scale = Vector2.all(0.6);
-    await add(logo);
-    logo.add(
+    wordmark.scale = Vector2.all(0.6);
+    await add(wordmark);
+    wordmark.add(
       ScaleEffect.to(
         Vector2.all(1),
         EffectController(
@@ -193,18 +251,14 @@ class _SplashScene extends PositionComponent {
       ),
     );
 
-    final subtitle = TextComponent(
-      text: 'POCKET EDITION',
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 9,
-          color: _ink,
-          letterSpacing: 2,
-        ),
-      ),
-      position: Vector2(_virtualSize / 2, 158),
-      anchor: Anchor.center,
+    final subtitle = _label(
+      'POCKET EDITION',
+      150,
+      190,
+      size: 6,
+      spacing: 1.6,
+      color: _ShellColors.ink,
+      anchoredCenter: true,
     );
     subtitle.scale = Vector2.all(0.01);
     await add(subtitle);
@@ -216,64 +270,35 @@ class _SplashScene extends PositionComponent {
     );
   }
 
-  Future<void> _addScanline() async {
-    final scanline = RectangleComponent(
-      position: Vector2(30, 50),
-      size: Vector2(228, 2),
-      paint: Paint()..color = const Color(0x55354839),
-    );
-    await add(scanline);
-    scanline.add(
-      MoveEffect.by(
-        Vector2(0, 118),
-        InfiniteEffectController(LinearEffectController(1.6)),
-      ),
-    );
-  }
-
-  Future<void> _addProgressBar() async {
+  Future<void> _addProgressAndBootText() async {
     await add(
       RectangleComponent(
-        position: Vector2(54, 184),
-        size: Vector2(180, 8),
-        paint: Paint()..color = const Color(0x77354839),
+        position: Vector2(52, 226),
+        size: Vector2(196, 7),
+        paint: Paint()..color = Color(0x772E2740),
       ),
     );
     final fill = RectangleComponent(
-      position: Vector2(54, 184),
-      size: Vector2(0, 8),
-      paint: Paint()..color = _ink,
+      position: Vector2(52, 226),
+      size: Vector2(0, 7),
+      paint: Paint()..color = _ShellColors.ink,
     );
     await add(fill);
     final seconds = (duration.inMilliseconds / 1000 - 0.3).clamp(0.5, 6.0);
     fill.add(
       SizeEffect.to(
-        Vector2(180, 8),
+        Vector2(196, 7),
         EffectController(duration: seconds.toDouble(), curve: Curves.easeInOut),
       ),
     );
-  }
 
-  Future<void> _addBootText() async {
-    // Fixed positions keep the lines and the skip hint from colliding.
     final lines = [
-      (0.95, 210.0, 'BOOTING FLAME CORE'),
-      (1.30, 227.0, 'GENERATING TETROMINOES'),
-      (1.65, 244.0, 'READY'),
+      (0.95, 244.0, 'BOOTING FLAME CORE'),
+      (1.30, 257.0, 'GENERATING TETROMINOES'),
+      (1.65, 270.0, 'READY'),
     ];
     for (final (delay, y, text) in lines) {
-      final label = TextComponent(
-        text: text,
-        textRenderer: TextPaint(
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 8.5,
-            color: _ink,
-            letterSpacing: 1,
-          ),
-        ),
-        position: Vector2(28, y),
-      );
+      final label = _label(text, 42, y, size: 6, spacing: .6);
       label.scale = Vector2.all(0.01);
       await add(label);
       label.add(
@@ -285,19 +310,109 @@ class _SplashScene extends PositionComponent {
     }
 
     await add(
+      _label(
+        'TAP TO SKIP',
+        150,
+        291,
+        size: 5.5,
+        spacing: 1.2,
+        anchoredCenter: true,
+      ),
+    );
+  }
+
+  TextComponent _label(
+    String text,
+    double x,
+    double y, {
+    double size = 6.5,
+    double spacing = 1,
+    Color color = _ShellColors.muted,
+    bool anchoredCenter = false,
+    bool anchoredEnd = false,
+  }) =>
       TextComponent(
-        text: 'TAP TO SKIP',
+        text: text,
         textRenderer: TextPaint(
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'monospace',
-            fontSize: 7,
-            color: Color(0xAA354839),
-            letterSpacing: 2,
+            fontSize: size,
+            fontWeight: FontWeight.w700,
+            letterSpacing: spacing,
+            color: color,
           ),
         ),
-        position: Vector2(_virtualSize / 2, 262),
-        anchor: Anchor.center,
+        position: Vector2(x, y),
+        anchor: anchoredCenter
+            ? Anchor.center
+            : anchoredEnd
+                ? Anchor.centerRight
+                : Anchor.topLeft,
+      );
+}
+
+/// Lowercase italic wordmark above the device, matching the app header.
+class _Wordmark extends PositionComponent {
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    final text = TextComponent(
+      text: 'flutris',
+      textRenderer: TextPaint(
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 32,
+          fontWeight: FontWeight.w900,
+          fontStyle: FontStyle.italic,
+          letterSpacing: -1.2,
+          color: _ShellColors.ink,
+        ),
       ),
+      position: Vector2(150, 32),
+      anchor: Anchor.center,
+    );
+    text.scale = Vector2.all(0.6);
+    await add(text);
+    text.add(
+      ScaleEffect.to(
+        Vector2.all(1),
+        EffectController(duration: 0.55, curve: Curves.easeOutBack),
+      ),
+    );
+  }
+}
+
+/// Bezel with the shell's asymmetric corner, border and hard offset shadow.
+class _DeviceBezel extends PositionComponent {
+  _DeviceBezel();
+
+  static const _rect = Rect.fromLTWH(26, 58, 248, 246);
+
+  RRect get _shape => RRect.fromRectAndCorners(
+        _rect,
+        topLeft: const Radius.circular(15),
+        topRight: const Radius.circular(15),
+        bottomLeft: const Radius.circular(15),
+        bottomRight: const Radius.circular(43),
+      );
+
+  @override
+  void render(Canvas canvas) {
+    final shadowShape = RRect.fromRectAndCorners(
+      _rect.shift(const Offset(0, 4)),
+      topLeft: const Radius.circular(15),
+      topRight: const Radius.circular(15),
+      bottomLeft: const Radius.circular(15),
+      bottomRight: const Radius.circular(43),
+    );
+    canvas.drawRRect(shadowShape, Paint()..color = _ShellColors.shadow);
+    canvas.drawRRect(_shape, Paint()..color = _ShellColors.bezel);
+    canvas.drawRRect(
+      _shape,
+      Paint()
+        ..color = _ShellColors.bezelBorder
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
   }
 }
