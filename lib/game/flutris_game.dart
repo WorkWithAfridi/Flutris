@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart' show KeyEventResult;
 import 'components/board_component.dart';
 import 'components/flow_overlay.dart';
 import 'components/line_clear_effect.dart';
+import '../persistence/best_score_store.dart';
 import '../feedback/feedback_cue.dart';
 import '../feedback/feedback_service.dart';
 import 'tetris.dart';
@@ -30,7 +31,10 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
     this.renderHud = true,
     this.compactMenu = false,
   }) : _engine = engine ?? TetrisEngine() {
-    flow = GameFlow(onStart: _startMode);
+    flow = GameFlow(
+      onStart: _startMode,
+      onBestChanged: (mode, score) => BestScoreStore.instance.save(mode, score),
+    );
   }
 
   static const int columns = TetrisEngine.columns;
@@ -86,6 +90,9 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    await BestScoreStore.instance.load();
+    flow.bestScores.addAll(BestScoreStore.instance.scores);
+    onStateChanged?.call();
     _board = BoardComponent(engine: _engine, palette: palette, priority: 1);
     _overlay = FlowOverlayComponent(
       flow: flow,

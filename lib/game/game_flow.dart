@@ -11,12 +11,14 @@ class GameFlow {
     List<ModeConfig>? modes,
     Map<GameMode, int>? bestScores,
     this.onStart,
-  })  : modes = modes ?? allModes,
-        bestScores = bestScores ?? <GameMode, int>{};
+    this.onBestChanged,
+  }) : modes = modes ?? allModes,
+       bestScores = bestScores ?? <GameMode, int>{};
 
   final List<ModeConfig> modes;
   final Map<GameMode, int> bestScores;
   final void Function(ModeConfig mode)? onStart;
+  final void Function(GameMode mode, int score)? onBestChanged;
 
   FlowState state = FlowState.menu;
   int selected = 0;
@@ -26,7 +28,8 @@ class GameFlow {
   bool get isMenu => state == FlowState.menu;
   bool get isPlaying => state == FlowState.playing;
   bool get isPaused => state == FlowState.paused;
-  bool get isEndScreen => state == FlowState.gameOver ||
+  bool get isEndScreen =>
+      state == FlowState.gameOver ||
       state == FlowState.victory ||
       state == FlowState.timeUp;
 
@@ -70,8 +73,10 @@ class GameFlow {
 
   void recordBest(TetrisEngine engine) {
     final previous = bestScores[engine.mode.mode] ?? 0;
-    if (previous == 0 || engine.score > previous) {
-      bestScores[engine.mode.mode] = engine.score;
+    final score = engine.score;
+    if (previous == 0 || score > previous) {
+      bestScores[engine.mode.mode] = score;
+      onBestChanged?.call(engine.mode.mode, score);
     }
   }
 }
