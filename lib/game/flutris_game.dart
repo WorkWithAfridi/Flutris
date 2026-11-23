@@ -90,9 +90,11 @@ class FlutrisGame extends FlameGame with KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    await BestScoreStore.instance.load();
-    flow.bestScores.addAll(BestScoreStore.instance.scores);
-    onStateChanged?.call();
+    // Fire-and-forget: storage must never block the game from loading.
+    BestScoreStore.instance.load().then((_) {
+      flow.bestScores.addAll(BestScoreStore.instance.scores);
+      onStateChanged?.call();
+    });
     _board = BoardComponent(engine: _engine, palette: palette, priority: 1);
     _overlay = FlowOverlayComponent(
       flow: flow,
